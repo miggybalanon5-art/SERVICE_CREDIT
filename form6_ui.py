@@ -45,190 +45,166 @@ def inject_app_css():
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+        /* --- Global Reset & Fluid Typography --- */
         html, body, [class*="css"] {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            -webkit-font-smoothing: antialiased;
         }
         
+        /* Mobile-first structural containment */
         .block-container { 
-            padding-top: 2rem; 
-            padding-bottom: 2rem; 
-            max-width: 1200px;
+            padding: 1rem 0.75rem !important;
+            max-width: 100% !important;
         }
         
-        h1, h2, h3, h4, h5, h6 { font-weight: 600; }
-        
-        .stButton > button {
-            background-color: var(--primary-color, #0064E0);
-            color: #FFFFFF;
-            border: none;
-            border-radius: 6px;
-            padding: 0.5rem 1rem;
-            font-weight: 600;
-            box-shadow: none;
-            transition: opacity 0.2s;
-            min-height: 44px;
+        h1, h2, h3 { 
+            font-weight: 700; 
+            letter-spacing: -0.025em;
+            line-height: 1.25;
         }
-        .stButton > button:hover { opacity: 0.9; color: #FFFFFF; }
-        .stButton > button:active { opacity: 0.8; color: #FFFFFF; }
         
+        /* --- High-Affordance Touch Targets (Minimum 48px height) --- */
+        .stButton > button, 
         .stDownloadButton > button {
-            background-color: var(--secondary-background-color);
-            color: var(--text-color);
+            width: 100% !important; /* Stack actions naturally by default on mobile screens */
+            background-color: var(--primary-color, #0064E0);
+            color: #FFFFFF !important;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
+            padding: 0.75rem 1rem !important;
             font-weight: 600;
-            min-height: 44px;
+            font-size: 0.95rem;
+            min-height: 48px !important;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            transition: background 0.15s ease-in-out, transform 0.1s ease;
         }
-        .stDownloadButton > button:hover { opacity: 0.8; color: var(--text-color); }
+        .stButton > button:hover, 
+        .stDownloadButton > button:hover { 
+            opacity: 0.95; 
+            background-color: #0052b8;
+        }
+        .stButton > button:active {
+            transform: scale(0.98);
+        }
         
+        /* Secondary Action Alternates */
+        .stDownloadButton > button {
+            background-color: var(--secondary-background-color, #F0F2F6);
+            color: var(--text-color, #31333F) !important;
+            border: 1px solid color-mix(in srgb, var(--text-color) 12%, transparent);
+        }
+        .stDownloadButton > button:hover {
+            background-color: color-mix(in srgb, var(--text-color) 8%, var(--secondary-background-color, #F0F2F6));
+        }
+        
+        /* --- Responsive Fluid Metric System --- */
         div[data-testid="stMetric"] {
             background-color: var(--background-color);
-            border: 1px solid var(--secondary-background-color);
-            border-radius: 8px;
-            padding: 1.2rem;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            border: 1px solid color-mix(in srgb, var(--text-color) 10%, transparent);
+            border-radius: 12px;
+            padding: 1rem !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+            width: 100%;
         }
         div[data-testid="stMetricValue"] {
             color: var(--primary-color, #0064E0);
-            font-size: 2.2rem;
+            font-size: 1.75rem !important;
             font-weight: 700;
+            line-height: 1.1;
         }
-        div[data-testid="stMetricLabel"] { font-size: 0.95rem; font-weight: 600; }
+        div[data-testid="stMetricLabel"] { 
+            font-size: 0.85rem !important; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+            letter-spacing: 0.05em;
+            opacity: 0.8;
+        }
         
-        /* 1. METRICS: FORCE HORIZONTAL SINGLE LINE FOR BOTH DESKTOP & MOBILE */
+        /* Metric container wrap-engine */
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
             display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            gap: 2px !important;
+            flex-flow: row wrap !important;
+            gap: 8px !important;
+            padding: 0 !important;
         }
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
-            width: auto !important;
-            flex: 1 1 0px !important; 
+            flex: 1 1 calc(50% - 4px) !important;
+            min-width: 140px !important;
         }
 
-        /* 2. CALENDAR: FACEBOOK COVER PHOTO ASPECT RATIO (320x75) */
+        /* --- Native Embedded Frame Constraints --- */
         iframe[title*="calendar" i],
         .fb-cover-calendar iframe,
         div[data-testid="stHtml"]:has(.fb-cover-calendar) {
             width: 100% !important;
-            aspect-ratio: 320 / 75 !important;
+            aspect-ratio: 16 / 10 !important; /* Upgraded from ultra-wide desktop aspect ratio for high mobile clarity */
             height: auto !important;
-            object-fit: cover;
+            border-radius: 10px;
             border: 1px solid var(--secondary-background-color);
-            border-radius: 8px;
         }
         
-        .streamlit-expanderHeader { font-weight: 600; background-color: transparent; border-radius: 8px; }
-        [data-testid="stSidebar"] { border-right: 1px solid var(--secondary-background-color); }
-        
+        /* --- Mobile-First Layout Tabs & Inputs --- */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 20px;
-            border-bottom: 1px solid var(--secondary-background-color);
+            gap: 8px;
+            border-bottom: 2px solid var(--secondary-background-color);
             overflow-x: auto;
-            overflow-y: hidden;
-            flex-wrap: nowrap !important;
+            scrollbar-width: none; /* Hide standard desktop scrollbars */
             -webkit-overflow-scrolling: touch;
-            scrollbar-width: thin;
+        }
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
+            display: none;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            white-space: nowrap;
-            background-color: transparent;
-            border-radius: 0;
+            height: 46px;
+            font-size: 0.9rem;
             font-weight: 600;
-            flex-shrink: 0;
+            padding: 0 12px !important;
         }
-        .stTabs [aria-selected="true"] { color: var(--primary-color, #0064E0) !important; border-bottom: 3px solid var(--primary-color, #0064E0) !important; }
         
-        div[role="radiogroup"] { flex-direction: row; flex-wrap: wrap; gap: 12px; padding-bottom: 15px; margin-bottom: 20px; }
-        div[role="radiogroup"] label { background-color: var(--background-color); border: 1px solid var(--secondary-background-color); border-radius: 20px; padding: 8px 18px; font-weight: 600; }
-        div[role="radiogroup"] label[data-checked="true"] { background-color: var(--secondary-background-color); border-color: var(--primary-color, #0064E0); color: var(--primary-color, #0064E0); }
+        /* Custom Pill Radios */
+        div[role="radiogroup"] { 
+            display: flex !important;
+            flex-wrap: wrap; 
+            gap: 8px; 
+        }
+        div[role="radiogroup"] label { 
+            background-color: var(--background-color); 
+            border: 1px solid color-mix(in srgb, var(--text-color) 15%, transparent); 
+            border-radius: 24px; 
+            padding: 6px 14px !important; 
+            font-size: 0.85rem;
+        }
         
-        [data-testid="stForm"] { background-color: var(--background-color); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--secondary-background-color); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
-        [data-testid="stDataFrame"] { background-color: var(--background-color); border: 1px solid var(--secondary-background-color); border-radius: 8px; padding: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); overflow-x: auto; }
+        /* Form Card UI Cleanups */
+        [data-testid="stForm"] { 
+            padding: 1rem !important; 
+            border-radius: 12px;
+            border: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
+        }
         
-        div[data-testid="stHorizontalBlock"] { padding: 6px 10px; border-radius: 6px; transition: background-color 0.15s ease-in-out; }
-        div[data-testid="stHorizontalBlock"]:hover { background-color: var(--secondary-background-color) !important; }
-        
-        .small-note { font-size: 0.95rem; margin-bottom: 1rem; opacity: 0.8; }
-        .section-divider { margin: 1.5rem 0; border-top: 1px solid var(--secondary-background-color); }
-
+        /* Form Inputs touch Optimization */
         div[data-baseweb="input"] > div,
-        div[data-baseweb="textarea"] > div,
         div[data-baseweb="select"] > div,
-        .stTextInput input,
-        .stTextArea textarea,
-        .stNumberInput input,
-        .stDateInput input {
-            border: 1px solid color-mix(in srgb, var(--text-color) 16%, transparent) !important;
-            border-radius: 6px !important;
-            transition: border-color 0.15s ease-in-out;
-        }
-        div[data-baseweb="input"] > div:focus-within,
-        div[data-baseweb="textarea"] > div:focus-within,
-        div[data-baseweb="select"] > div:focus-within {
-            border-color: var(--primary-color, #0064E0) !important;
+        .stTextInput input, .stSelectbox div {
+            min-height: 44px !important;
+            border-radius: 8px !important;
         }
 
-        @media (max-width: 768px) {
+        /* --- Desktop Media Queries (Scale Up smoothly for larger views) --- */
+        @media (min-width: 769px) {
             .block-container {
-                padding-top: 1rem;
-                padding-bottom: 1rem;
-                max-width: 100%;
+                padding: 2rem 1.5rem !important;
+                max-width: 1100px !important;
             }
-
-            h1 { font-size: 1.6rem; }
-            h2 { font-size: 1.35rem; }
-            h3 { font-size: 1.15rem; }
-
-            .stButton > button,
-            .stDownloadButton > button {
-                min-height: 48px;
-                font-size: 1rem;
-                padding: 0.75rem 1.25rem;
+            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
+                flex: 1 1 0px !important;
             }
-
-            /* Stack standard blocks contextually, ignoring metrics via priority above */
-            div[data-testid="stHorizontalBlock"] {
-                flex-direction: column !important;
-                width: 100% !important;
+            .stButton > button, .stDownloadButton > button {
+                width: auto !important;
             }
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-                width: 100% !important;
+            iframe[title*="calendar" i] {
+                aspect-ratio: 820 / 312 !important;
             }
-
-            div[data-testid="stMetric"] { padding: 0.85rem; }
-            div[data-testid="stMetricValue"] { font-size: 1.6rem; }
-            div[data-testid="stMetricLabel"] { font-size: 0.85rem; }
-
-            .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-            .stTabs [data-baseweb="tab"] {
-                height: 42px;
-                font-size: 0.85rem;
-                padding: 0 4px;
-            }
-
-            .streamlit-expanderHeader {
-                padding: 1rem;
-                font-size: 1.05rem;
-            }
-
-            [data-testid="stDataFrame"] { padding: 4px; }
-        }
-
-        @media (max-width: 480px) {
-            h1 { font-size: 1.4rem; }
-            h2 { font-size: 1.2rem; }
-
-            .stButton > button,
-            .stDownloadButton > button {
-                min-height: 44px;
-                font-size: 0.95rem;
-                padding: 0.65rem 1rem;
-            }
-
-            div[data-testid="stMetricValue"] { font-size: 1.4rem; }
         }
         </style>
         """,
@@ -240,29 +216,32 @@ def confirm_destructive_action(action_id: str, action_label: str, action_type: s
     confirm_key = f"_confirm_{action_id}"
     
     if st.session_state.get(confirm_key):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.warning(f"⚠️ This {action_type} cannot be undone!")
-        with col2:
-            if st.button("❌ Cancel", key=f"cancel_{action_id}", use_container_width=True):
+        # Displays warning cleanly without breaking layouts on narrow viewports
+        st.error(f"⚠️ **Confirm {action_type.title()}**\n\nThis action is permanent and cannot be undone!")
+        
+        # Grid blocks map smoothly across mobile screen widths cleanly
+        col_action, col_cancel = st.columns(2)
+        with col_action:
+            executed = st.button(
+                f"Yes, {action_type.title()}", 
+                key=f"confirm_{action_id}", 
+                use_container_width=True, 
+                type="primary"
+            )
+        with col_cancel:
+            if st.button("Cancel", key=f"cancel_{action_id}", use_container_width=True):
                 st.session_state[confirm_key] = False
                 st.rerun()
-        
-        confirm_col, warning_col = st.columns([1, 1.5])
-        with confirm_col:
-            if st.button(f"✓ Confirm {action_type.title()}", key=f"confirm_{action_id}", 
-                        use_container_width=True, type="primary"):
-                st.session_state[confirm_key] = False
-                return True
-        
-        with warning_col:
-            st.caption(f"Click 'Confirm {action_type.title()}' to proceed.")
-        
+                
+        if executed:
+            st.session_state[confirm_key] = False
+            return True
         return False
     else:
-        st.session_state[confirm_key] = True
-        st.warning(f"⚠️ Are you sure you want to {action_type} {action_label}? Click the button again to confirm.")
-        st.rerun()
+        if st.button(f"🗑️ {action_type.title()} {action_label}", key=f"trigger_{action_id}", use_container_width=True):
+            st.session_state[confirm_key] = True
+            st.rerun()
+        return False
 
 
 def keyed_tabs(labels: list[str], session_key: str):
@@ -348,7 +327,7 @@ def render_metrics(employees: pd.DataFrame, leaves: pd.DataFrame) -> None:
 
     cols = st.columns(2)
     cols[0].metric("Total Employees", f"{registered_employees:,}")
-    cols[1].metric("Ongoing / Upcoming Leaves", f"{upcoming_leaves_count:,}")
+    cols[1].metric("Ongoing / Upcoming", f"{upcoming_leaves_count:,}")
 
 
 def export_workbook_bytes(tables: dict[str, pd.DataFrame]) -> bytes:
