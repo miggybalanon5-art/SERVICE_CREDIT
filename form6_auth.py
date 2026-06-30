@@ -350,13 +350,41 @@ def log_action(username: str, action: str, details: str):
         writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), username, action, details])
 
 
+# ----------------------------------------------------------------
+# URL QUERY-PARAM TOKEN ROUND-TRIP
+# ----------------------------------------------------------------
+# These two functions are what let a logged-in session survive a browser
+# refresh: on login we stash the session token in the URL's ?session=...
+# query param, and on every fresh page load we read it back out so it can
+# be looked up against browser_sessions.csv. Streamlit 1.30+ exposes this
+# through the stable st.query_params mapping; the except branches are a
+# fallback for older Streamlit using the deprecated experimental API, kept
+# only as a safety net.
 def get_session_query_token() -> str:
-    clear_session_query_token()
-    return ""
+    try:
+        token = st.query_params.get("session", "")
+        if isinstance(token, list):
+            token = token[0] if token else ""
+        return str(token or "")
+    except Exception:
+        try:
+            params = st.experimental_get_query_params()
+            values = params.get("session", [])
+            return values[0] if values else ""
+        except Exception:
+            return ""
 
 
 def set_session_query_token(token: str):
-    return
+    try:
+        st.query_params["session"] = token
+    except Exception:
+        try:
+            params = st.experimental_get_query_params()
+            params["session"] = token
+            st.experimental_set_query_params(**params)
+        except Exception:
+            pass
 
 
 def clear_session_query_token():
