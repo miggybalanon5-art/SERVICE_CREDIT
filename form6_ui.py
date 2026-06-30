@@ -177,6 +177,20 @@ def inject_app_css():
                 width: 100% !important;
             }
 
+            /* Exception: metric rows (e.g. the Overview 2x2 grid) should stay
+               side-by-side in pairs on mobile instead of stacking to one
+               metric per row, which wastes vertical space. */
+            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
+                flex-direction: row !important;
+                flex-wrap: wrap !important;
+                gap: 0.6rem !important;
+            }
+            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
+                width: calc(50% - 0.3rem) !important;
+                flex: 1 1 calc(50% - 0.3rem) !important;
+                min-width: calc(50% - 0.3rem) !important;
+            }
+
             div[data-testid="stMetric"] { padding: 0.85rem; }
             div[data-testid="stMetricValue"] { font-size: 1.6rem; }
             div[data-testid="stMetricLabel"] { font-size: 0.85rem; }
