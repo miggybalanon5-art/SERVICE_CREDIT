@@ -100,14 +100,14 @@ def inject_app_css():
             display: flex !important;
             flex-direction: row !important;
             flex-wrap: nowrap !important;
-            gap: 10px !important;
+            gap: 2px !important;
         }
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
             width: auto !important;
             flex: 1 1 0px !important; 
         }
 
-        /* 2. CALENDAR: FACEBOOK COVER PHOTO ASPECT RATIO (820x312) */
+        /* 2. CALENDAR: FACEBOOK COVER PHOTO ASPECT RATIO (320x75) */
         iframe[title*="calendar" i],
         .fb-cover-calendar iframe,
         div[data-testid="stHtml"]:has(.fb-cover-calendar) {
