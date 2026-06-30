@@ -50,9 +50,11 @@ def inject_app_css():
         }
         
         .block-container { 
-            padding-top: 2rem; 
-            padding-bottom: 2rem; 
-            max-width: 1200px;
+            padding-top: 1.5rem; 
+            padding-bottom: 1.5rem; 
+            padding-left: clamp(1rem, 3vw, 2rem);
+            padding-right: clamp(1rem, 3vw, 2rem);
+            max-width: 1440px;
         }
         
         h1, h2, h3, h4, h5, h6 { font-weight: 600; }
@@ -95,26 +97,55 @@ def inject_app_css():
         }
         div[data-testid="stMetricLabel"] { font-size: 0.95rem; font-weight: 600; }
         
-        /* 1. METRICS: FORCE HORIZONTAL SINGLE LINE FOR BOTH DESKTOP & MOBILE */
+        /* 1. METRICS: single row at every breakpoint. min-width:0 is what actually
+           lets a flex child shrink below its content's natural width - without it,
+           flex:1 1 0px is ignored once content (e.g. "1,234") is wider than the
+           shrunk track, which is why this kept overflowing on phones. Sizes scale
+           fluidly with clamp() instead of jumping at fixed breakpoints. */
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
             display: flex !important;
             flex-direction: row !important;
             flex-wrap: nowrap !important;
-            gap: 10px !important;
+            gap: clamp(6px, 2vw, 14px) !important;
+            padding: 0 !important;
         }
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
             width: auto !important;
-            flex: 1 1 0px !important; 
+            min-width: 0 !important;
+            flex: 1 1 0px !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) div[data-testid="stMetric"] {
+            padding: clamp(0.6rem, 2.2vw, 1.2rem) !important;
+            overflow: hidden;
+        }
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) div[data-testid="stMetricValue"] {
+            font-size: clamp(1.1rem, 4.2vw, 2.2rem) !important;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) div[data-testid="stMetricLabel"] {
+            font-size: clamp(0.68rem, 2.3vw, 0.95rem) !important;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        /* 2. CALENDAR: FACEBOOK COVER PHOTO ASPECT RATIO (820x312) */
+        /* 2. CALENDAR: full width, edge to edge, with a height driven by its own
+           content rather than a fixed 820:312 banner crop (that ratio is built for
+           a Facebook cover photo, not a calendar grid - forcing it onto a calendar
+           widget is what was producing the empty/cropped space). */
+        div[data-testid="element-container"]:has(iframe[title*="calendar" i]),
+        div[data-testid="element-container"]:has(.fb-cover-calendar) {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
         iframe[title*="calendar" i],
         .fb-cover-calendar iframe,
         div[data-testid="stHtml"]:has(.fb-cover-calendar) {
+            display: block;
             width: 100% !important;
-            aspect-ratio: 820 / 312 !important;
-            height: auto !important;
-            object-fit: cover;
+            height: clamp(420px, 50vw, 640px) !important;
             border: 1px solid var(--secondary-background-color);
             border-radius: 8px;
         }
@@ -198,9 +229,8 @@ def inject_app_css():
                 width: 100% !important;
             }
 
-            div[data-testid="stMetric"] { padding: 0.85rem; }
-            div[data-testid="stMetricValue"] { font-size: 1.6rem; }
-            div[data-testid="stMetricLabel"] { font-size: 0.85rem; }
+            /* Metric sizing is handled by the fluid clamp() rule above -
+               no fixed breakpoint override needed here. */
 
             .stTabs [data-baseweb="tab-list"] { gap: 10px; }
             .stTabs [data-baseweb="tab"] {
@@ -227,8 +257,6 @@ def inject_app_css():
                 font-size: 0.95rem;
                 padding: 0.65rem 1rem;
             }
-
-            div[data-testid="stMetricValue"] { font-size: 1.4rem; }
         }
         </style>
         """,
