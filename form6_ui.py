@@ -1,11 +1,3 @@
-"""
-Shared UI building blocks for the Form 6 Tracker: CSS injection, flash/toast
-messaging, and small formatting/export helpers used by multiple tabs.
-
-Nothing in this file touches the database directly - it's presentation-only,
-so it can be imported by any tab module without pulling in write logic.
-"""
-
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -17,6 +9,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+# --- EXPORT STYLING CONSTANTS ---
 HEADER_FILL = PatternFill("solid", fgColor="0064E0")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 LIGHT_BORDER = Border(
@@ -38,172 +31,205 @@ CREDIT_DISPLAY_RENAME = {
     "credit_units": "Units", "employee_label": "Employee", "grade": "Grade",
 }
 
-
 def inject_app_css():
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 
         /* =========================================================
-           GLOBAL DESKTOP & GLASSMORPHISM BASE
+           1. GOOGLE MATERIAL DESIGN BASE (GLOBAL)
            ========================================================= */
         html, body, [class*="css"] {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+            font-family: 'Google Sans', 'Inter', -apple-system, sans-serif !important;
+            color: #E8EAED !important;
         }
         
         .block-container { 
-            padding-top: 2rem; 
+            padding-top: 1.5rem; 
             padding-bottom: 2rem; 
             max-width: 1200px;
         }
-        
-        h1, h2, h3, h4, h5, h6 { font-weight: 600; }
-        
-        /* Glassmorphism for Metrics & Forms */
-        div[data-testid="stMetric"], 
-        [data-testid="stForm"] {
-            background: rgba(30, 30, 35, 0.6) !important;
-            backdrop-filter: blur(12px) !important;
-            -webkit-backdrop-filter: blur(12px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 12px !important;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+
+        header { background: transparent !important; }
+
+        h1, h2, h3, h4, h5, h6 { 
+            font-family: 'Google Sans', sans-serif !important;
+            font-weight: 600 !important;
+            color: #FFFFFF !important;
+            letter-spacing: -0.01em !important;
         }
 
-        /* Buttons Base */
+        /* Material Buttons */
         .stButton > button {
-            background-color: var(--primary-color, #0064E0);
-            color: #FFFFFF;
-            border: none;
-            border-radius: 6px;
-            padding: 0.5rem 1rem;
-            font-weight: 600;
-            box-shadow: none;
-            transition: opacity 0.2s;
-            min-height: 48px !important; /* Optimized for touch */
+            background-color: #8AB4F8 !important;
+            color: #121212 !important;
+            border: none !important;
+            border-radius: 24px !important;
+            padding: 10px 24px !important;
+            font-weight: 600 !important;
+            font-size: 0.95rem !important;
+            transition: all 0.2s ease !important;
+            min-height: 48px !important;
         }
-        .stButton > button:hover { opacity: 0.9; color: #FFFFFF; }
-        .stButton > button:active { opacity: 0.8; color: #FFFFFF; }
-        
-        /* 4-Column Metric Grid (Desktop Default) */
+        .stButton > button:hover { 
+            background-color: #AECBFA !important; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
+        }
+
+        /* Input Fields */
+        div[data-baseweb="select"] > div, 
+        div[data-baseweb="input"] > div {
+            background-color: #1E1E1E !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            border-radius: 8px !important;
+        }
+
+        /* =========================================================
+           2. MATERIAL CARDS (METRICS & FORMS)
+           ========================================================= */
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
             display: grid !important;
             grid-template-columns: repeat(4, 1fr) !important;
             gap: 16px !important;
             width: 100% !important;
         }
+        
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
             width: 100% !important;
-            min-width: 0 !important;
+            min-width: 100% !important; 
+            display: flex !important;
         }
-        
+
+        div[data-testid="stMetric"], 
+        [data-testid="stForm"],
+        [data-testid="stDataFrame"] {
+            background-color: #1E1E1E !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            border-radius: 12px !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+            width: 100% !important; 
+        }
+
         div[data-testid="stMetric"] {
-            padding: 1.2rem 0.5rem !important;
+            padding: 16px !important;
             display: flex !important;
             flex-direction: column !important;
-            align-items: center !important;
+            align-items: flex-start !important;
             justify-content: center !important;
         }
+
         div[data-testid="stMetricValue"] {
-            color: var(--primary-color, #0064E0);
-            font-size: clamp(1.2rem, 3.5vw, 2.2rem) !important;
-            font-weight: 700;
-            line-height: 1.2 !important;
-            text-align: center !important;
-        }
-        div[data-testid="stMetricLabel"] { 
-            font-size: clamp(0.7rem, 1.8vw, 0.9rem) !important; 
-            font-weight: 600; 
-            text-align: center !important; 
-            white-space: pre-wrap !important;
-            margin-bottom: 4px !important;
+            color: #8AB4F8 !important;
+            font-size: 2rem !important;
+            font-weight: 500 !important;
+            line-height: 1.1 !important;
+            font-family: 'Google Sans', sans-serif !important;
         }
 
-        /* Calendar & General Elements */
-        div[data-testid="stHtml"], iframe[title*="calendar" i], .fb-cover-calendar iframe {
-            width: 100% !important; max-width: 100% !important; border-radius: 8px;
+        div[data-testid="stMetricLabel"] { 
+            color: #9AA0A6 !important;
+            font-size: 0.85rem !important; 
+            font-weight: 500 !important; 
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            margin-bottom: 8px !important;
         }
-        [data-testid="stSidebar"] { border-right: 1px solid var(--secondary-background-color); }
-        
-        /* Desktop Tabs */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); overflow-x: auto; flex-wrap: nowrap !important; scrollbar-width: thin;
-        }
-        .stTabs [data-baseweb="tab"] {
-            height: 50px; white-space: nowrap; background-color: transparent; border-radius: 0; font-weight: 600;
-        }
-        .stTabs [aria-selected="true"] { color: var(--primary-color, #0064E0) !important; border-bottom: 3px solid var(--primary-color, #0064E0) !important; }
-        
-        [data-testid="stDataFrame"] { background-color: var(--background-color); border-radius: 8px; padding: 10px; overflow-x: auto; }
 
         /* =========================================================
-           MOBILE RESPONSIVENESS (< 768px)
-           Targets: 360x640, 393x851, 412x915
+           3. TABS & DATA TABLES (MD3 STYLE)
+           ========================================================= */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0px !important; 
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important; 
+            padding-bottom: 0 !important;
+        }
+        .stTabs [data-baseweb="tab"] {
+            height: 48px; 
+            background-color: transparent !important; 
+            border-radius: 0 !important; 
+            font-weight: 500 !important;
+            color: #9AA0A6 !important;
+            padding: 0 16px !important;
+            margin: 0 !important;
+            border-bottom: 3px solid transparent !important;
+        }
+        .stTabs [aria-selected="true"] { 
+            color: #8AB4F8 !important; 
+            border-bottom: 3px solid #8AB4F8 !important; 
+        }
+
+        /* =========================================================
+           4. MOBILE-FIRST RESPONSIVENESS (< 768px)
            ========================================================= */
         @media screen and (max-width: 768px) {
             
-            /* 1. Spacing, Margins, & Chat Buffer */
             .block-container {
                 padding-top: 1rem !important;
-                padding-left: 1rem !important;
-                padding-right: 1rem !important;
-                padding-bottom: 6rem !important; /* Prevents floating chat overlap */
-                max-width: 100vw !important;
+                padding-left: 12px !important;
+                padding-right: 12px !important;
+                padding-bottom: 5rem !important; 
             }
-            [data-testid="stVerticalBlock"] > div { padding-bottom: 0.5rem !important; }
 
-            /* 2. Typography Adjustments & Name Wrapping */
             h1, [data-testid="stHeadingContainer"] h1 {
-                font-size: 1.6rem !important; /* Reduced ~40% */
-                line-height: 1.2 !important;
+                font-size: 1.7rem !important; 
+                line-height: 1.3 !important;
                 word-wrap: break-word !important;
-                white-space: normal !important; /* Prevents employee name cutoff */
+                white-space: normal !important; 
             }
-            h2 { font-size: 1.4rem !important; }
-            h3 { font-size: 1.1rem !important; }
 
-            /* 3. Metric Cards: Convert to 2x2 Grid */
             div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
                 grid-template-columns: repeat(2, 1fr) !important;
-                gap: 8px !important;
+                gap: 12px !important;
             }
 
-            /* Stack all other normal columns vertically */
             div[data-testid="stHorizontalBlock"]:not(:has(div[data-testid="stMetric"])) {
                 flex-direction: column !important;
-                width: 100% !important;
             }
             div[data-testid="stHorizontalBlock"]:not(:has(div[data-testid="stMetric"])) > div[data-testid="column"] {
                 width: 100% !important;
+                min-width: 100% !important;
             }
 
-            /* 4. Tables: Horizontal Scrolling */
-            [data-testid="stDataFrame"], [data-testid="stTable"] {
-                width: 100% !important;
-                max-width: 100vw !important;
-                overflow-x: auto !important;
-                display: block !important;
+            div[data-testid="stHtml"] {
+                height: auto !important;
+                min-height: max-content !important;
+                margin-top: -10px !important;
                 padding: 0 !important;
+                width: 100% !important;
+                overflow: hidden !important;
+                display: flex !important;
+                justify-content: center !important;
+            }
+            
+            iframe[title*="calendar" i], .fb-cover-calendar iframe {
+                width: 100% !important;
+                min-width: 100% !important;
+                height: 400px !important;
+                border: none !important;
             }
 
-            /* 5. Touch Targets: Tabs & Buttons */
+            [data-testid="stVerticalBlock"] > div { 
+                padding-bottom: 0 !important; 
+                margin-bottom: 8px !important;
+            }
+
             .stTabs [data-baseweb="tab-list"] {
-                gap: 5px !important;
-                -webkit-overflow-scrolling: touch;
+                display: flex !important;
+                justify-content: space-between !important;
+                overflow-x: auto !important;
+                scrollbar-width: none !important;
             }
             .stTabs [data-baseweb="tab"] {
-                min-height: 48px !important;
-                font-size: 0.9rem !important;
-                padding: 0 12px !important;
+                flex: 1 !important;
+                text-align: center !important;
+                font-size: 0.85rem !important;
+                min-width: max-content !important;
             }
 
-            /* 6. Form Elements: Dropdowns & Calendar Fit */
-            [data-baseweb="select"], [data-testid="stDateInput"], iframe[title*="calendar" i], .fb-cover-calendar iframe, div[data-testid="stHtml"] {
-                width: 100% !important;
-                max-width: 100vw !important;
-                aspect-ratio: auto !important;
-                min-height: 400px !important;
+            [data-testid="stDataFrame"] {
+                padding: 0 !important;
+                border: none !important;
             }
         }
         </style>
@@ -211,10 +237,8 @@ def inject_app_css():
         unsafe_allow_html=True,
     )
 
-
 def confirm_destructive_action(action_id: str, action_label: str, action_type: str = "delete") -> bool:
     confirm_key = f"_confirm_{action_id}"
-    
     if st.session_state.get(confirm_key):
         col1, col2 = st.columns(2)
         with col1:
@@ -230,27 +254,20 @@ def confirm_destructive_action(action_id: str, action_label: str, action_type: s
                         use_container_width=True, type="primary"):
                 st.session_state[confirm_key] = False
                 return True
-        
         with warning_col:
             st.caption(f"Click 'Confirm {action_type.title()}' to proceed.")
-        
         return False
     else:
         st.session_state[confirm_key] = True
         st.warning(f"⚠️ Are you sure you want to {action_type} {action_label}? Click the button again to confirm.")
         st.rerun()
 
-
 def keyed_tabs(labels: list[str], session_key: str):
-    try:
-        return st.tabs(labels, key=session_key)
-    except TypeError:
-        return st.tabs(labels)
-
+    try: return st.tabs(labels, key=session_key)
+    except TypeError: return st.tabs(labels)
 
 def flash(message: str, kind: str = "success") -> None:
     st.session_state["flash_message"] = {"message": message, "kind": kind}
-
 
 def show_flash() -> None:
     payload = st.session_state.pop("flash_message", None)
@@ -261,16 +278,13 @@ def show_flash() -> None:
     elif kind == "warning": st.warning(message)
     else: st.success(message)
 
-
 def queue_toast(message: str, icon: str = "✅") -> None:
     st.session_state["pending_toast"] = {"message": message, "icon": icon}
-
 
 def show_pending_toast() -> None:
     payload = st.session_state.pop("pending_toast", None)
     if not payload: return
     st.toast(payload.get("message", ""), icon=payload.get("icon", "✅"))
-
 
 def safe_text(value) -> str:
     if value is None: return ""
@@ -279,7 +293,6 @@ def safe_text(value) -> str:
         if pd.isna(value): return ""
         return pd.Timestamp(value).strftime("%Y-%m-%d")
     return str(value)
-
 
 def readable_view(df: pd.DataFrame, drop: list[str] | None = None, rename: dict[str, str] | None = None) -> pd.DataFrame:
     if df.empty: return df.copy()
@@ -295,11 +308,9 @@ def readable_view(df: pd.DataFrame, drop: list[str] | None = None, rename: dict[
         result = result.rename(columns={k: v for k, v in rename.items() if k in result.columns})
     return result
 
-
 def month_index_from_date(value: date | datetime | None) -> int:
     if value is None: return 0
     return max(0, min(11, pd.Timestamp(value).month - 1))
-
 
 def date_bounds(leaves: pd.DataFrame, credits: pd.DataFrame) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
     if leaves.empty or "date_of_filing" not in leaves.columns: return None, None
@@ -307,21 +318,16 @@ def date_bounds(leaves: pd.DataFrame, credits: pd.DataFrame) -> tuple[pd.Timesta
     if series.empty: return None, None
     return series.min(), series.max()
 
-
 def employee_options(df: pd.DataFrame) -> dict[str, int]:
     if df.empty: return {}
     return dict(zip(df["employee_label"].tolist(), df["id"].tolist(), strict=False))
 
-
 def render_metrics(employees: pd.DataFrame, leaves: pd.DataFrame) -> None:
     cols = st.columns(4)
-    
-    # Inject your backend tracking metrics/variables inside the second strings here:
     cols[0].metric("LEAVE DAYS USE", "0")
     cols[1].metric("LOCAL CREDITS", "0")
     cols[2].metric("DIVISION CREDITS", "0")
     cols[3].metric("RELIEVER POINTS", "0")
-
 
 def export_workbook_bytes(tables: dict[str, pd.DataFrame]) -> bytes:
     workbook = Workbook()
@@ -352,7 +358,6 @@ def export_workbook_bytes(tables: dict[str, pd.DataFrame]) -> bytes:
     buffer = BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
-
 
 def db_backup_bytes() -> bytes:
     from form6_store import DB_PATH, ensure_database
