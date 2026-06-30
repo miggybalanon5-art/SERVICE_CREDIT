@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# Local virtual environments
+.venv/
+venv/
+env/
+
+# Streamlit secrets and local runtime data
+.streamlit/secrets.toml
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+system_users.csv
+audit_log.csv
+browser_sessions.csv
+user_uploads/
+user_images/
+
+# Backups and generated package artifacts
+* - Copy*
+BACKUP*/
+*.spec
