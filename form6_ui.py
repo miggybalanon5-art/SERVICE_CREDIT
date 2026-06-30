@@ -71,29 +71,70 @@ def inject_app_css():
         .stButton > button:hover { opacity: 0.9; color: #FFFFFF; }
         .stButton > button:active { opacity: 0.8; color: #FFFFFF; }
         
-        .stDownloadButton > button {
-            background-color: var(--secondary-background-color);
-            color: var(--text-color);
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            min-height: 44px;
+        /* =========================================================================
+           1. BULLETPROOF METRICS ROW (CSS GRID) 
+           ========================================================================= */
+        /* Force the block containing metrics into a strict 4-column Grid */
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            gap: 8px !important;
+            width: 100% !important;
         }
-        .stDownloadButton > button:hover { opacity: 0.8; color: var(--text-color); }
         
+        /* Nullify Streamlit's injected inline column widths */
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            display: flex !important;
+            justify-content: center !important;
+        }
+
+        /* Perfectly center align all content inside the metric box */
         div[data-testid="stMetric"] {
             background-color: var(--background-color);
             border: 1px solid var(--secondary-background-color);
             border-radius: 8px;
-            padding: 1.2rem;
+            padding: 0.8rem 0.2rem !important;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
+        
         div[data-testid="stMetricValue"] {
             color: var(--primary-color, #0064E0);
-            font-size: 2.2rem;
+            font-size: clamp(1rem, 3.5vw, 2.2rem) !important;
             font-weight: 700;
+            line-height: 1.2 !important;
+            text-align: center !important;
+            width: 100% !important;
         }
-        div[data-testid="stMetricLabel"] { font-size: 0.95rem; font-weight: 600; }
+
+        div[data-testid="stMetricLabel"] { 
+            font-size: clamp(0.6rem, 1.8vw, 0.9rem) !important; 
+            font-weight: 600; 
+            text-align: center !important; 
+            width: 100% !important;
+            white-space: pre-wrap !important; /* Allow long words to wrap neatly to next line */
+            line-height: 1.2 !important;
+            margin-bottom: 4px !important;
+        }
+
+        /* =========================================================================
+           2. CALENDAR FULL WIDTH FIX
+           ========================================================================= */
+        /* Make HTML containers, iframes, and tables span full width */
+        div[data-testid="stHtml"], 
+        iframe[title*="calendar" i],
+        .fb-cover-calendar iframe {
+            width: 100% !important;
+            max-width: 100% !important;
+            border-radius: 8px;
+            border: 1px solid var(--secondary-background-color);
+        }
         
         .streamlit-expanderHeader { font-weight: 600; background-color: transparent; border-radius: 8px; }
         [data-testid="stSidebar"] { border-right: 1px solid var(--secondary-background-color); }
@@ -124,29 +165,7 @@ def inject_app_css():
         [data-testid="stForm"] { background-color: var(--background-color); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--secondary-background-color); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
         [data-testid="stDataFrame"] { background-color: var(--background-color); border: 1px solid var(--secondary-background-color); border-radius: 8px; padding: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); overflow-x: auto; }
         
-        div[data-testid="stHorizontalBlock"] { padding: 6px 10px; border-radius: 6px; transition: background-color 0.15s ease-in-out; }
-        div[data-testid="stHorizontalBlock"]:hover { background-color: var(--secondary-background-color) !important; }
-        
-        .small-note { font-size: 0.95rem; margin-bottom: 1rem; opacity: 0.8; }
-        .section-divider { margin: 1.5rem 0; border-top: 1px solid var(--secondary-background-color); }
-
-        div[data-baseweb="input"] > div,
-        div[data-baseweb="textarea"] > div,
-        div[data-baseweb="select"] > div,
-        .stTextInput input,
-        .stTextArea textarea,
-        .stNumberInput input,
-        .stDateInput input {
-            border: 1px solid color-mix(in srgb, var(--text-color) 16%, transparent) !important;
-            border-radius: 6px !important;
-            transition: border-color 0.15s ease-in-out;
-        }
-        div[data-baseweb="input"] > div:focus-within,
-        div[data-baseweb="textarea"] > div:focus-within,
-        div[data-baseweb="select"] > div:focus-within {
-            border-color: var(--primary-color, #0064E0) !important;
-        }
-
+        /* MEDIA CONFIGURATIONS FOR MOBILE */
         @media (max-width: 768px) {
             .block-container {
                 padding-top: 1rem;
@@ -154,46 +173,23 @@ def inject_app_css():
                 max-width: 100%;
             }
 
-            h1 { font-size: 1.6rem; }
-            h2 { font-size: 1.35rem; }
-            h3 { font-size: 1.15rem; }
-
-            .stButton > button,
-            .stDownloadButton > button {
-                min-height: 48px;
-                font-size: 1rem;
-                padding: 0.75rem 1.25rem;
+            /* CALENDAR ON MOBILE: Remove fixed aspect ratio, ensure it takes full space */
+            iframe[title*="calendar" i],
+            .fb-cover-calendar iframe,
+            div[data-testid="stHtml"] {
+                aspect-ratio: auto !important;
+                min-height: 450px !important; /* Make sure calendar has height to render days */
+                width: 100% !important;
             }
 
-            /* Only stack generic horizontal blocks (filters, forms, etc).
-               Tables now use st.dataframe, which already scrolls natively,
-               so they are unaffected by this rule. */
-            div[data-testid="stHorizontalBlock"] {
+            /* Stack regular columns EXCEPT the metrics grid */
+            div[data-testid="stHorizontalBlock"]:not(:has(div[data-testid="stMetric"])) {
                 flex-direction: column !important;
                 width: 100% !important;
             }
-
-            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            div[data-testid="stHorizontalBlock"]:not(:has(div[data-testid="stMetric"])) > div[data-testid="column"] {
                 width: 100% !important;
             }
-
-            /* Exception: metric rows (e.g. the Overview 2x2 grid) should stay
-               side-by-side in pairs on mobile instead of stacking to one
-               metric per row, which wastes vertical space. */
-            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
-                flex-direction: row !important;
-                flex-wrap: wrap !important;
-                gap: 0.6rem !important;
-            }
-            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
-                width: calc(50% - 0.3rem) !important;
-                flex: 1 1 calc(50% - 0.3rem) !important;
-                min-width: calc(50% - 0.3rem) !important;
-            }
-
-            div[data-testid="stMetric"] { padding: 0.85rem; }
-            div[data-testid="stMetricValue"] { font-size: 1.6rem; }
-            div[data-testid="stMetricLabel"] { font-size: 0.85rem; }
 
             .stTabs [data-baseweb="tab-list"] { gap: 10px; }
             .stTabs [data-baseweb="tab"] {
@@ -202,26 +198,7 @@ def inject_app_css():
                 padding: 0 4px;
             }
 
-            .streamlit-expanderHeader {
-                padding: 1rem;
-                font-size: 1.05rem;
-            }
-
             [data-testid="stDataFrame"] { padding: 4px; }
-        }
-
-        @media (max-width: 480px) {
-            h1 { font-size: 1.4rem; }
-            h2 { font-size: 1.2rem; }
-
-            .stButton > button,
-            .stDownloadButton > button {
-                min-height: 44px;
-                font-size: 0.95rem;
-                padding: 0.65rem 1rem;
-            }
-
-            div[data-testid="stMetricValue"] { font-size: 1.4rem; }
         }
         </style>
         """,
@@ -331,17 +308,13 @@ def employee_options(df: pd.DataFrame) -> dict[str, int]:
 
 
 def render_metrics(employees: pd.DataFrame, leaves: pd.DataFrame) -> None:
-    registered_employees = len(employees)
-    today_ts = pd.Timestamp(date.today())
-    upcoming_leaves_count = 0
-    leaves_only = leaves[leaves.get("source_kind", "") != "biometrics"] if not leaves.empty else leaves
-    if not leaves_only.empty and "date_of_filing" in leaves_only.columns:
-        parsed_dates = pd.to_datetime(leaves_only["date_of_filing"], errors="coerce")
-        upcoming_leaves_count = int((parsed_dates >= today_ts).sum())
-
-    cols = st.columns(2)
-    cols[0].metric("Total Employees", f"{registered_employees:,}")
-    cols[1].metric("Ongoing / Upcoming Leaves", f"{upcoming_leaves_count:,}")
+    cols = st.columns(4)
+    
+    # Inject your backend tracking metrics/variables inside the second strings here:
+    cols[0].metric("LEAVE DAYS USE", "0")
+    cols[1].metric("LOCAL CREDITS", "0")
+    cols[2].metric("DIVISION CREDITS", "0")
+    cols[3].metric("RELIEVER POINTS", "0")
 
 
 def export_workbook_bytes(tables: dict[str, pd.DataFrame]) -> bytes:
