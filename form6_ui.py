@@ -81,49 +81,69 @@ def inject_app_css():
         }
         .stDownloadButton > button:hover { opacity: 0.8; color: var(--text-color); }
         
-        /* 1. METRICS: FORCE 4 ITEMS ON ONE HORIZONTAL LINE ALWAYS */
+        /* =========================================================================
+           1. METRICS ROW ACCIDENTS & OVERFLOW MITIGATION (FORCED SINGLE LINE LOCK)
+           ========================================================================= */
+        /* Force container block into a structural flexrow with zero wrap toleration */
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
             display: flex !important;
             flex-direction: row !important;
             flex-wrap: nowrap !important;
             width: 100% !important;
-            gap: 0.4rem !important; /* Keep gap small to maximize space */
+            max-width: 100% !important;
+            gap: 6px !important;
         }
         
-        /* Force columns to share space equally and NEVER wrap */
+        /* Wipe out Streamlit responsive styling overrides on metric columns */
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
             width: 25% !important;
+            max-width: 25% !important;
+            min-width: 0 !important;
             flex: 1 1 0px !important;
-            min-width: 0 !important; /* Critical for squeezing on mobile */
         }
 
-        /* Metric Box Styling */
+        /* Enforce child elements inside columns to preserve bounds */
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) div[data-testid="stVerticalBlock"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+        }
+
+        /* Absolute container layout optimization for the internal component cards */
         div[data-testid="stMetric"] {
             background-color: var(--background-color);
             border: 1px solid var(--secondary-background-color);
             border-radius: 8px;
-            padding: 1rem 0.5rem;
+            padding: 0.6rem 0.2rem !important;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             text-align: center !important;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            display: block !important;
         }
+        
+        /* Dynamic viewport text rendering rules to prevent off-screen bleed */
         div[data-testid="stMetricValue"] {
             color: var(--primary-color, #0064E0);
-            font-size: 2rem;
+            font-size: clamp(0.95rem, 3.2vw, 2.2rem) !important;
             font-weight: 700;
+            line-height: 1.1 !important;
+            word-wrap: break-word !important;
         }
         div[data-testid="stMetricLabel"] { 
-            font-size: 0.85rem; 
+            font-size: clamp(0.5rem, 1.8vw, 0.9rem) !important; 
             font-weight: 600; 
-            white-space: normal !important; /* Allow long words to wrap inside box */
+            white-space: normal !important; 
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
             line-height: 1.2 !important;
         }
 
-        /* 2. CALENDAR: FACEBOOK COVER PHOTO ASPECT RATIO (820x312) */
+        /* =========================================================================
+           2. CALENDAR: FACEBOOK COVER PHOTO ASPECT RATIO (820x312)
+           ========================================================================= */
         iframe[title*="calendar" i],
         .fb-cover-calendar iframe,
         div[data-testid="stHtml"]:has(.fb-cover-calendar) {
@@ -187,7 +207,7 @@ def inject_app_css():
             border-color: var(--primary-color, #0064E0) !important;
         }
 
-        /* MOBILE SPECIFIC CSS */
+        /* MEDIA CONFIGURATIONS FOR CELL PHONE DISPLAY INTERFACES */
         @media (max-width: 768px) {
             .block-container {
                 padding-top: 1rem;
@@ -206,24 +226,13 @@ def inject_app_css():
                 padding: 0.75rem 1.25rem;
             }
 
-            /* Stack standard blocks contextually, EXCEPT metrics */
+            /* Stack structural elements natively *EXCEPT* when metric components are active */
             div[data-testid="stHorizontalBlock"]:not(:has(div[data-testid="stMetric"])) {
                 flex-direction: column !important;
                 width: 100% !important;
             }
             div[data-testid="stHorizontalBlock"]:not(:has(div[data-testid="stMetric"])) > div[data-testid="column"] {
                 width: 100% !important;
-            }
-
-            /* SHRINK METRICS TO FIT MOBILE WIDTH */
-            div[data-testid="stMetric"] { 
-                padding: 0.5rem 0.1rem !important; 
-            }
-            div[data-testid="stMetricValue"] { 
-                font-size: 1.1rem !important; 
-            }
-            div[data-testid="stMetricLabel"] { 
-                font-size: 0.55rem !important; /* Extremely small to fit 4 across */
             }
 
             .stTabs [data-baseweb="tab-list"] { gap: 10px; }
@@ -360,10 +369,9 @@ def employee_options(df: pd.DataFrame) -> dict[str, int]:
 
 
 def render_metrics(employees: pd.DataFrame, leaves: pd.DataFrame) -> None:
-    # Set up 4 explicit columns
     cols = st.columns(4)
     
-    # Replace the "0" strings below with your actual variables/calculations
+    # Inject your backend tracking metrics/variables inside the second strings here:
     cols[0].metric("LEAVE DAYS USE", "0")
     cols[1].metric("LOCAL CREDITS", "0")
     cols[2].metric("DIVISION CREDITS", "0")
