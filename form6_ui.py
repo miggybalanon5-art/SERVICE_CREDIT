@@ -45,6 +45,9 @@ def inject_app_css():
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+        /* =========================================================
+           GLOBAL DESKTOP & GLASSMORPHISM BASE
+           ========================================================= */
         html, body, [class*="css"] {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
         }
@@ -57,6 +60,18 @@ def inject_app_css():
         
         h1, h2, h3, h4, h5, h6 { font-weight: 600; }
         
+        /* Glassmorphism for Metrics & Forms */
+        div[data-testid="stMetric"], 
+        [data-testid="stForm"] {
+            background: rgba(30, 30, 35, 0.6) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 12px !important;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        /* Buttons Base */
         .stButton > button {
             background-color: var(--primary-color, #0064E0);
             color: #FFFFFF;
@@ -66,123 +81,95 @@ def inject_app_css():
             font-weight: 600;
             box-shadow: none;
             transition: opacity 0.2s;
-            min-height: 44px;
+            min-height: 48px !important; /* Optimized for touch */
         }
         .stButton > button:hover { opacity: 0.9; color: #FFFFFF; }
         .stButton > button:active { opacity: 0.8; color: #FFFFFF; }
         
-        /* =========================================================================
-           1. BULLETPROOF METRICS ROW (CSS GRID) 
-           ========================================================================= */
-        /* Force the block containing metrics into a strict 4-column Grid */
+        /* 4-Column Metric Grid (Desktop Default) */
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
             display: grid !important;
             grid-template-columns: repeat(4, 1fr) !important;
-            gap: 8px !important;
+            gap: 16px !important;
             width: 100% !important;
         }
-        
-        /* Nullify Streamlit's injected inline column widths */
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
             width: 100% !important;
             min-width: 0 !important;
-            display: flex !important;
-            justify-content: center !important;
         }
-
-        /* Perfectly center align all content inside the metric box */
+        
         div[data-testid="stMetric"] {
-            background-color: var(--background-color);
-            border: 1px solid var(--secondary-background-color);
-            border-radius: 8px;
-            padding: 0.8rem 0.2rem !important;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            width: 100% !important;
+            padding: 1.2rem 0.5rem !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
         }
-        
         div[data-testid="stMetricValue"] {
             color: var(--primary-color, #0064E0);
-            font-size: clamp(1rem, 3.5vw, 2.2rem) !important;
+            font-size: clamp(1.2rem, 3.5vw, 2.2rem) !important;
             font-weight: 700;
             line-height: 1.2 !important;
             text-align: center !important;
-            width: 100% !important;
         }
-
         div[data-testid="stMetricLabel"] { 
-            font-size: clamp(0.6rem, 1.8vw, 0.9rem) !important; 
+            font-size: clamp(0.7rem, 1.8vw, 0.9rem) !important; 
             font-weight: 600; 
             text-align: center !important; 
-            width: 100% !important;
-            white-space: pre-wrap !important; /* Allow long words to wrap neatly to next line */
-            line-height: 1.2 !important;
+            white-space: pre-wrap !important;
             margin-bottom: 4px !important;
         }
 
-        /* =========================================================================
-           2. CALENDAR FULL WIDTH FIX
-           ========================================================================= */
-        /* Make HTML containers, iframes, and tables span full width */
-        div[data-testid="stHtml"], 
-        iframe[title*="calendar" i],
-        .fb-cover-calendar iframe {
-            width: 100% !important;
-            max-width: 100% !important;
-            border-radius: 8px;
-            border: 1px solid var(--secondary-background-color);
+        /* Calendar & General Elements */
+        div[data-testid="stHtml"], iframe[title*="calendar" i], .fb-cover-calendar iframe {
+            width: 100% !important; max-width: 100% !important; border-radius: 8px;
         }
-        
-        .streamlit-expanderHeader { font-weight: 600; background-color: transparent; border-radius: 8px; }
         [data-testid="stSidebar"] { border-right: 1px solid var(--secondary-background-color); }
         
+        /* Desktop Tabs */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 20px;
-            border-bottom: 1px solid var(--secondary-background-color);
-            overflow-x: auto;
-            overflow-y: hidden;
-            flex-wrap: nowrap !important;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: thin;
+            gap: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); overflow-x: auto; flex-wrap: nowrap !important; scrollbar-width: thin;
         }
         .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            white-space: nowrap;
-            background-color: transparent;
-            border-radius: 0;
-            font-weight: 600;
-            flex-shrink: 0;
+            height: 50px; white-space: nowrap; background-color: transparent; border-radius: 0; font-weight: 600;
         }
         .stTabs [aria-selected="true"] { color: var(--primary-color, #0064E0) !important; border-bottom: 3px solid var(--primary-color, #0064E0) !important; }
         
-        div[role="radiogroup"] { flex-direction: row; flex-wrap: wrap; gap: 12px; padding-bottom: 15px; margin-bottom: 20px; }
-        div[role="radiogroup"] label { background-color: var(--background-color); border: 1px solid var(--secondary-background-color); border-radius: 20px; padding: 8px 18px; font-weight: 600; }
-        div[role="radiogroup"] label[data-checked="true"] { background-color: var(--secondary-background-color); border-color: var(--primary-color, #0064E0); color: var(--primary-color, #0064E0); }
-        
-        [data-testid="stForm"] { background-color: var(--background-color); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--secondary-background-color); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
-        [data-testid="stDataFrame"] { background-color: var(--background-color); border: 1px solid var(--secondary-background-color); border-radius: 8px; padding: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); overflow-x: auto; }
-        
-        /* MEDIA CONFIGURATIONS FOR MOBILE */
-        @media (max-width: 768px) {
+        [data-testid="stDataFrame"] { background-color: var(--background-color); border-radius: 8px; padding: 10px; overflow-x: auto; }
+
+        /* =========================================================
+           MOBILE RESPONSIVENESS (< 768px)
+           Targets: 360x640, 393x851, 412x915
+           ========================================================= */
+        @media screen and (max-width: 768px) {
+            
+            /* 1. Spacing, Margins, & Chat Buffer */
             .block-container {
-                padding-top: 1rem;
-                padding-bottom: 1rem;
-                max-width: 100%;
+                padding-top: 1rem !important;
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                padding-bottom: 6rem !important; /* Prevents floating chat overlap */
+                max-width: 100vw !important;
+            }
+            [data-testid="stVerticalBlock"] > div { padding-bottom: 0.5rem !important; }
+
+            /* 2. Typography Adjustments & Name Wrapping */
+            h1, [data-testid="stHeadingContainer"] h1 {
+                font-size: 1.6rem !important; /* Reduced ~40% */
+                line-height: 1.2 !important;
+                word-wrap: break-word !important;
+                white-space: normal !important; /* Prevents employee name cutoff */
+            }
+            h2 { font-size: 1.4rem !important; }
+            h3 { font-size: 1.1rem !important; }
+
+            /* 3. Metric Cards: Convert to 2x2 Grid */
+            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 8px !important;
             }
 
-            /* CALENDAR ON MOBILE: Remove fixed aspect ratio, ensure it takes full space */
-            iframe[title*="calendar" i],
-            .fb-cover-calendar iframe,
-            div[data-testid="stHtml"] {
-                aspect-ratio: auto !important;
-                min-height: 450px !important; /* Make sure calendar has height to render days */
-                width: 100% !important;
-            }
-
-            /* Stack regular columns EXCEPT the metrics grid */
+            /* Stack all other normal columns vertically */
             div[data-testid="stHorizontalBlock"]:not(:has(div[data-testid="stMetric"])) {
                 flex-direction: column !important;
                 width: 100% !important;
@@ -191,14 +178,33 @@ def inject_app_css():
                 width: 100% !important;
             }
 
-            .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-            .stTabs [data-baseweb="tab"] {
-                height: 42px;
-                font-size: 0.85rem;
-                padding: 0 4px;
+            /* 4. Tables: Horizontal Scrolling */
+            [data-testid="stDataFrame"], [data-testid="stTable"] {
+                width: 100% !important;
+                max-width: 100vw !important;
+                overflow-x: auto !important;
+                display: block !important;
+                padding: 0 !important;
             }
 
-            [data-testid="stDataFrame"] { padding: 4px; }
+            /* 5. Touch Targets: Tabs & Buttons */
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 5px !important;
+                -webkit-overflow-scrolling: touch;
+            }
+            .stTabs [data-baseweb="tab"] {
+                min-height: 48px !important;
+                font-size: 0.9rem !important;
+                padding: 0 12px !important;
+            }
+
+            /* 6. Form Elements: Dropdowns & Calendar Fit */
+            [data-baseweb="select"], [data-testid="stDateInput"], iframe[title*="calendar" i], .fb-cover-calendar iframe, div[data-testid="stHtml"] {
+                width: 100% !important;
+                max-width: 100vw !important;
+                aspect-ratio: auto !important;
+                min-height: 400px !important;
+            }
         }
         </style>
         """,
