@@ -98,8 +98,23 @@ def inject_app_css():
         .streamlit-expanderHeader { font-weight: 600; background-color: transparent; border-radius: 8px; }
         [data-testid="stSidebar"] { border-right: 1px solid var(--secondary-background-color); }
         
-        .stTabs [data-baseweb="tab-list"] { gap: 20px; border-bottom: 1px solid var(--secondary-background-color); }
-        .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: transparent; border-radius: 0; font-weight: 600; }
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 20px;
+            border-bottom: 1px solid var(--secondary-background-color);
+            overflow-x: auto;
+            overflow-y: hidden;
+            flex-wrap: nowrap !important;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+        .stTabs [data-baseweb="tab"] {
+            height: 50px;
+            white-space: nowrap;
+            background-color: transparent;
+            border-radius: 0;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
         .stTabs [aria-selected="true"] { color: var(--primary-color, #0064E0) !important; border-bottom: 3px solid var(--primary-color, #0064E0) !important; }
         
         div[role="radiogroup"] { flex-direction: row; flex-wrap: wrap; gap: 12px; padding-bottom: 15px; margin-bottom: 20px; }
@@ -107,7 +122,7 @@ def inject_app_css():
         div[role="radiogroup"] label[data-checked="true"] { background-color: var(--secondary-background-color); border-color: var(--primary-color, #0064E0); color: var(--primary-color, #0064E0); }
         
         [data-testid="stForm"] { background-color: var(--background-color); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--secondary-background-color); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
-        [data-testid="stDataFrame"] { background-color: var(--background-color); border: 1px solid var(--secondary-background-color); border-radius: 8px; padding: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+        [data-testid="stDataFrame"] { background-color: var(--background-color); border: 1px solid var(--secondary-background-color); border-radius: 8px; padding: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); overflow-x: auto; }
         
         div[data-testid="stHorizontalBlock"] { padding: 6px 10px; border-radius: 6px; transition: background-color 0.15s ease-in-out; }
         div[data-testid="stHorizontalBlock"]:hover { background-color: var(--secondary-background-color) !important; }
@@ -139,9 +154,9 @@ def inject_app_css():
                 max-width: 100%;
             }
 
-            h1 { font-size: 1.75rem; }
-            h2 { font-size: 1.5rem; }
-            h3 { font-size: 1.25rem; }
+            h1 { font-size: 1.6rem; }
+            h2 { font-size: 1.35rem; }
+            h3 { font-size: 1.15rem; }
 
             .stButton > button,
             .stDownloadButton > button {
@@ -150,20 +165,40 @@ def inject_app_css():
                 padding: 0.75rem 1.25rem;
             }
 
+            /* Only stack generic horizontal blocks (filters, forms, etc).
+               Tables now use st.dataframe, which already scrolls natively,
+               so they are unaffected by this rule. */
             div[data-testid="stHorizontalBlock"] {
                 flex-direction: column !important;
                 width: 100% !important;
+            }
+
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+                width: 100% !important;
+            }
+
+            div[data-testid="stMetric"] { padding: 0.85rem; }
+            div[data-testid="stMetricValue"] { font-size: 1.6rem; }
+            div[data-testid="stMetricLabel"] { font-size: 0.85rem; }
+
+            .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+            .stTabs [data-baseweb="tab"] {
+                height: 42px;
+                font-size: 0.85rem;
+                padding: 0 4px;
             }
 
             .streamlit-expanderHeader {
                 padding: 1rem;
                 font-size: 1.05rem;
             }
+
+            [data-testid="stDataFrame"] { padding: 4px; }
         }
 
         @media (max-width: 480px) {
-            h1 { font-size: 1.5rem; }
-            h2 { font-size: 1.25rem; }
+            h1 { font-size: 1.4rem; }
+            h2 { font-size: 1.2rem; }
 
             .stButton > button,
             .stDownloadButton > button {
@@ -171,6 +206,8 @@ def inject_app_css():
                 font-size: 0.95rem;
                 padding: 0.65rem 1rem;
             }
+
+            div[data-testid="stMetricValue"] { font-size: 1.4rem; }
         }
         </style>
         """,
