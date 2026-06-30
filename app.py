@@ -1,3 +1,5 @@
+From __future__ import annotations
+
 import base64
 import html
 import os
@@ -270,3 +272,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
