@@ -92,7 +92,7 @@ def _render_attendance_calendar_html(year: int, month: int, day_status: dict) ->
 
     grid_css = """
     <style>
-    .cal-grid-wrapper { margin: 4px 0; max-width: 260px; font-family: sans-serif; }
+    .cal-grid-wrapper { margin: 4px 0; max-width: 260px; width: 100%; font-family: sans-serif; }
     .cal-weekday-row { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 6px; }
     .cal-weekday { text-align: center; font-size: 10px; font-weight: 600; color: var(--text-color); opacity: 0.5; }
     .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
@@ -107,6 +107,11 @@ def _render_attendance_calendar_html(year: int, month: int, day_status: dict) ->
     .cal-cell.cal-today { box-shadow: inset 0 0 0 1.5px var(--primary-color, #0064E0); }
     .cal-daynum { font-size: 12px; font-weight: 500; color: var(--text-color); opacity: 0.85; }
     .cal-daynum-colored { font-size: 12px; font-weight: 700; }
+
+    @media (max-width: 768px) {
+        .cal-grid-wrapper { max-width: 100%; }
+        .cal-cell { height: 38px; }
+    }
     </style>
     """
 
@@ -220,16 +225,19 @@ def employee_portal():
 
     # =========================================================================
     # 2. OVERVIEW - Immediate summary including Reliever Points
+    # Laid out as a 2x2 grid so it stays readable on narrow / mobile screens
+    # instead of squeezing 4 metrics into one row.
     # =========================================================================
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     st.subheader("Overview")
-    
+
     leave_used = float(my_summary.iloc[0].get('leave_days', 0) or 0) if not my_summary.empty else 0.0
-    cols = st.columns(4)
-    cols[0].metric("Leave Days Used", f"{leave_used:.2f}")
-    cols[1].metric("Local Credits", f"{local_bal:.2f}")
-    cols[2].metric("Division Credits", f"{div_bal:.2f}")
-    cols[3].metric("Reliever Points", f"{my_reliever_progress['total_points']:.2f}")
+    overview_row1 = st.columns(2)
+    overview_row1[0].metric("Leave Days Used", f"{leave_used:.2f}")
+    overview_row1[1].metric("Local Credits", f"{local_bal:.2f}")
+    overview_row2 = st.columns(2)
+    overview_row2[0].metric("Division Credits", f"{div_bal:.2f}")
+    overview_row2[1].metric("Reliever Points", f"{my_reliever_progress['total_points']:.2f}")
 
     # =========================================================================
     # 3. MY ATTENDANCE CALENDAR
@@ -258,6 +266,8 @@ def employee_portal():
         sorted_months = sorted(available_months, reverse=True)
         month_labels = {f"{month_names[m-1]} {y}": (y, m) for y, m in sorted_months}
 
+        # On narrow screens the global mobile CSS stacks st.columns vertically,
+        # so this still renders as: month picker on top, calendar below.
         cal_col, _spacer_col = st.columns([0.3, 0.7])
         with cal_col:
             selected_label = st.selectbox("Month", list(month_labels.keys()), index=0, key="portal_calendar_month", label_visibility="collapsed")
@@ -284,6 +294,9 @@ def employee_portal():
 
     # =========================================================================
     # 4. TABBED DATA LEDGERS
+    # Rendered as real st.dataframe tables (instead of manual st.columns rows)
+    # so they stay tabular with native horizontal scrolling on mobile, rather
+    # than collapsing into a stacked list under the global mobile column CSS.
     # =========================================================================
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     
@@ -303,23 +316,27 @@ def employee_portal():
 
             if not earned_ledger.empty:
                 earned_ledger = earned_ledger.sort_values(by="date", ascending=False, na_position="last")
-                h_cols = st.columns([0.20, 0.25, 0.40, 0.15])
-                h_cols[0].markdown("**Type**")
-                h_cols[1].markdown("**Date**")
-                h_cols[2].markdown("**What For**")
-                h_cols[3].markdown("**Credits**")
-                st.divider()
 
-                for _, row in earned_ledger.iterrows():
-                    r_cols = st.columns([0.20, 0.25, 0.40, 0.15])
-                    r_cols[0].write(row.get("credit_scope_label", ""))
-                    r_cols[1].write(safe_text(row.get("date")))
+                def _clean_what_for(desc) -> str:
+                    text = str(desc or "")
+                    if text.startswith("Earned - "):
+                        text = text.replace("Earned - ", "", 1)
+                    return text
 
-                    desc = str(row.get("description", ""))
-                    if desc.startswith("Earned - "):
-                        desc = desc.replace("Earned - ", "", 1)
-                    r_cols[2].write(desc)
-                    r_cols[3].write(f"{float(row.get('change', 0) or 0):.2f}")
+                credits_table = pd.DataFrame({
+                    "Type": earned_ledger.get("credit_scope_label", ""),
+                    "Date": earned_ledger.get("date", "").apply(safe_text),
+                    "What For": earned_ledger.get("description", "").apply(_clean_what_for),
+                    "Credits": earned_ledger.get("change", 0).astype(float).round(2),
+                })
+                st.dataframe(
+                    credits_table,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Credits": st.column_config.NumberColumn("Credits", format="%.2f"),
+                    },
+                )
             else:
                 st.info("You don't have any earned credits on file yet.")
         else:
@@ -331,22 +348,22 @@ def employee_portal():
             st.info("You don't have any leave records on file yet.")
         else:
             display_leaves = my_regular_leaves.sort_values("date_of_filing", ascending=False, na_position="last")
-            h_cols = st.columns([0.15, 0.15, 0.20, 0.15, 0.20, 0.15])
-            h_cols[0].markdown("**Date Filed**")
-            h_cols[1].markdown("**Month**")
-            h_cols[2].markdown("**Type of Leave**")
-            h_cols[3].markdown("**Days**")
-            h_cols[4].markdown("**Dates Covered**")
-            h_cols[5].markdown("**Credit Used**")
-            st.divider()
-            for _, leave_row in display_leaves.iterrows():
-                r_cols = st.columns([0.15, 0.15, 0.20, 0.15, 0.20, 0.15])
-                r_cols[0].write(safe_text(leave_row.get("date_of_filing")))
-                r_cols[1].write(leave_row.get("month", ""))
-                r_cols[2].write(leave_row.get("leave_type", ""))
-                r_cols[3].write(f"{leave_row.get('total_days', 0):.2f}")
-                r_cols[4].write(leave_row.get("inclusive_dates", "") or "-")
-                r_cols[5].write(leave_row.get("service_credit_availed", "") or "-")
+            leave_table = pd.DataFrame({
+                "Date Filed": display_leaves.get("date_of_filing", "").apply(safe_text),
+                "Month": display_leaves.get("month", ""),
+                "Type of Leave": display_leaves.get("leave_type", ""),
+                "Days": display_leaves.get("total_days", 0).astype(float).round(2),
+                "Dates Covered": display_leaves.get("inclusive_dates", "").replace("", "-").fillna("-"),
+                "Credit Used": display_leaves.get("service_credit_availed", "").replace("", "-").fillna("-"),
+            })
+            st.dataframe(
+                leave_table,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Days": st.column_config.NumberColumn("Days", format="%.2f"),
+                },
+            )
 
     # --- TAB 3: RELIEVER POINTS ---
     with tab_reliever:
@@ -359,18 +376,23 @@ def employee_portal():
                 f"You have {my_reliever_progress['points_carried_over']:.2f} points toward your next credit."
             )
             display_reliever = my_reliever_sessions.sort_values("entry_date", ascending=False, na_position="last")
-            h_cols = st.columns([0.20, 0.15, 0.45, 0.20])
-            h_cols[0].markdown("**Date**")
-            h_cols[1].markdown("**Points**")
-            h_cols[2].markdown("**Notes**")
-            h_cols[3].markdown("**Hours**")
-            st.divider()
-            for _, sess_row in display_reliever.iterrows():
-                r_cols = st.columns([0.20, 0.15, 0.45, 0.20])
-                r_cols[0].write(safe_text(sess_row.get("entry_date")))
-                r_cols[1].write(f"{float(sess_row.get('points', 0) or 0):.2f}")
-                r_cols[2].write(sess_row.get("notes", "") or "-")
-                r_cols[3].write(f"{points_to_hours(sess_row.get('points', 0), my_reliever_progress['minutes_per_point']):.2f}")
+            reliever_table = pd.DataFrame({
+                "Date": display_reliever.get("entry_date", "").apply(safe_text),
+                "Points": display_reliever.get("points", 0).astype(float).round(2),
+                "Notes": display_reliever.get("notes", "").replace("", "-").fillna("-"),
+                "Hours": display_reliever.get("points", 0).apply(
+                    lambda p: points_to_hours(p, my_reliever_progress['minutes_per_point'])
+                ).astype(float).round(2),
+            })
+            st.dataframe(
+                reliever_table,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Points": st.column_config.NumberColumn("Points", format="%.2f"),
+                    "Hours": st.column_config.NumberColumn("Hours", format="%.2f"),
+                },
+            )
         else:
             st.info("You don't have any reliever sessions logged yet.")
 
