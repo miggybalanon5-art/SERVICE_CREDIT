@@ -44,7 +44,15 @@ else:
 
 PAGE_TITLE = "Service Credit Tracker"
 
-st.set_page_config(page_title=PAGE_TITLE, layout="wide")
+# ============================================================================
+# MOBILE-FIRST CONFIGURATION 
+# Added initial_sidebar_state="collapsed" to hide sidebar on mobile loads
+# ============================================================================
+st.set_page_config(
+    page_title=PAGE_TITLE, 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
 
 
 # ----------------------------------------------------------------------------
@@ -272,5 +280,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
