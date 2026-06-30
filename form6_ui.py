@@ -112,7 +112,7 @@ def inject_app_css():
         .fb-cover-calendar iframe,
         div[data-testid="stHtml"]:has(.fb-cover-calendar) {
             width: 100% !important;
-            aspect-ratio: 820 / 312 !important;
+            aspect-ratio: 320 / 75 !important;
             height: auto !important;
             object-fit: cover;
             border: 1px solid var(--secondary-background-color);
