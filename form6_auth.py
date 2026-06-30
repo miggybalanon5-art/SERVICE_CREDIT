@@ -36,11 +36,12 @@ BROWSER_SESSIONS_FILE = os.path.join(BASE_DIR, "browser_sessions.csv")
 LOG_FILE = os.path.join(BASE_DIR, "audit_log.csv")
 LOGO_PATH = os.path.join(BASE_DIR, "SCHOOL_LOGO.png")
 
-SESSION_TIMEOUT_MINUTES = 30
-MAX_LOGIN_ATTEMPTS = 5
-LOCKOUT_SECONDS = 5 * 60
+SESSION_TIMEOUT_MINUTES = 30  # Inactivity timeout (still kicks users out after 30 min idle)
+SESSION_PERSISTENCE_DAYS = 7  # Token persistence across server restarts
 PASSWORD_HASH_ITERATIONS = 260_000
 PASSWORD_HASH_SCHEME = "pbkdf2_sha256"
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_SECONDS = 5 * 60
 
 # Self-registered Employee Portal accounts pick their own employee_id from a
 # dropdown during signup with no verification that the person registering
@@ -419,7 +420,7 @@ def clear_session_query_token():
 
 
 # ----------------------------------------------------------------------------
-# BROWSER SESSION PERSISTENCE (CSV-backed)
+# BROWSER SESSION PERSISTENCE (CSV-backed) - 7 DAY TOKENS
 # ----------------------------------------------------------------------------
 def _session_token_hash(token: str) -> str:
     return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
@@ -457,6 +458,8 @@ def write_browser_sessions(rows: list[dict]):
 
 
 def create_browser_session(username: str, role: str) -> str:
+    """Create a new browser session token valid for SESSION_PERSISTENCE_DAYS (7 days).
+    This allows users to stay logged in across server restarts."""
     now = time.time()
     token = secrets.token_urlsafe(32)
     rows = []
@@ -469,13 +472,14 @@ def create_browser_session(username: str, role: str) -> str:
     rows.append({
         "token_hash": _session_token_hash(token), "username": username, "role": role,
         "created_at": str(now), "last_seen": str(now),
-        "expires_at": str(now + (SESSION_TIMEOUT_MINUTES * 60)),
+        "expires_at": str(now + (SESSION_PERSISTENCE_DAYS * 24 * 60 * 60)),  # 7 days
     })
     write_browser_sessions(rows)
     return token
 
 
 def restore_browser_session(token: str) -> dict | None:
+    """Restore a session from a token. Extends expiration if valid. Returns session data or None."""
     if not token:
         return None
     now = time.time()
@@ -496,7 +500,7 @@ def restore_browser_session(token: str) -> dict | None:
             row["role"] = users_db[username]["role"]
             row["token_hash"] = _session_token_hash(token)
             row["last_seen"] = str(now)
-            row["expires_at"] = str(now + (SESSION_TIMEOUT_MINUTES * 60))
+            row["expires_at"] = str(now + (SESSION_PERSISTENCE_DAYS * 24 * 60 * 60))  # Extend 7 days
             restored = {
                 "username": username, "role": row["role"], "token": token,
                 "employee_id": users_db[username].get("employee_id"),
