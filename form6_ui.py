@@ -81,46 +81,30 @@ def inject_app_css():
         }
         .stDownloadButton > button:hover { opacity: 0.8; color: var(--text-color); }
         
-        /* 1. METRICS: FORCE 4 ITEMS ON ONE HORIZONTAL LINE ALWAYS */
-        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            width: 100% !important;
-            gap: 0.4rem !important; /* Keep gap small to maximize space */
-        }
-        
-        /* Force columns to share space equally and NEVER wrap */
-        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
-            width: 25% !important;
-            flex: 1 1 0px !important;
-            min-width: 0 !important; /* Critical for squeezing on mobile */
-        }
-
-        /* Metric Box Styling */
         div[data-testid="stMetric"] {
             background-color: var(--background-color);
             border: 1px solid var(--secondary-background-color);
             border-radius: 8px;
-            padding: 1rem 0.5rem;
+            padding: 1.2rem;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            text-align: center !important;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
         }
         div[data-testid="stMetricValue"] {
             color: var(--primary-color, #0064E0);
-            font-size: 2rem;
+            font-size: 2.2rem;
             font-weight: 700;
         }
-        div[data-testid="stMetricLabel"] { 
-            font-size: 0.85rem; 
-            font-weight: 600; 
-            white-space: normal !important; /* Allow long words to wrap inside box */
-            line-height: 1.2 !important;
+        div[data-testid="stMetricLabel"] { font-size: 0.95rem; font-weight: 600; }
+        
+        /* 1. METRICS: FORCE HORIZONTAL SINGLE LINE FOR BOTH DESKTOP & MOBILE */
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 10px !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
+            width: auto !important;
+            flex: 1 1 0px !important; 
         }
 
         /* 2. CALENDAR: FACEBOOK COVER PHOTO ASPECT RATIO (820x312) */
@@ -187,7 +171,6 @@ def inject_app_css():
             border-color: var(--primary-color, #0064E0) !important;
         }
 
-        /* MOBILE SPECIFIC CSS */
         @media (max-width: 768px) {
             .block-container {
                 padding-top: 1rem;
@@ -206,25 +189,18 @@ def inject_app_css():
                 padding: 0.75rem 1.25rem;
             }
 
-            /* Stack standard blocks contextually, EXCEPT metrics */
-            div[data-testid="stHorizontalBlock"]:not(:has(div[data-testid="stMetric"])) {
+            /* Stack standard blocks contextually, ignoring metrics via priority above */
+            div[data-testid="stHorizontalBlock"] {
                 flex-direction: column !important;
                 width: 100% !important;
             }
-            div[data-testid="stHorizontalBlock"]:not(:has(div[data-testid="stMetric"])) > div[data-testid="column"] {
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
                 width: 100% !important;
             }
 
-            /* SHRINK METRICS TO FIT MOBILE WIDTH */
-            div[data-testid="stMetric"] { 
-                padding: 0.5rem 0.1rem !important; 
-            }
-            div[data-testid="stMetricValue"] { 
-                font-size: 1.1rem !important; 
-            }
-            div[data-testid="stMetricLabel"] { 
-                font-size: 0.55rem !important; /* Extremely small to fit 4 across */
-            }
+            div[data-testid="stMetric"] { padding: 0.85rem; }
+            div[data-testid="stMetricValue"] { font-size: 1.6rem; }
+            div[data-testid="stMetricLabel"] { font-size: 0.85rem; }
 
             .stTabs [data-baseweb="tab-list"] { gap: 10px; }
             .stTabs [data-baseweb="tab"] {
@@ -251,6 +227,8 @@ def inject_app_css():
                 font-size: 0.95rem;
                 padding: 0.65rem 1rem;
             }
+
+            div[data-testid="stMetricValue"] { font-size: 1.4rem; }
         }
         </style>
         """,
@@ -360,14 +338,17 @@ def employee_options(df: pd.DataFrame) -> dict[str, int]:
 
 
 def render_metrics(employees: pd.DataFrame, leaves: pd.DataFrame) -> None:
-    # Set up 4 explicit columns
-    cols = st.columns(4)
-    
-    # Replace the "0" strings below with your actual variables/calculations
-    cols[0].metric("LEAVE DAYS USE", "0")
-    cols[1].metric("LOCAL CREDITS", "0")
-    cols[2].metric("DIVISION CREDITS", "0")
-    cols[3].metric("RELIEVER POINTS", "0")
+    registered_employees = len(employees)
+    today_ts = pd.Timestamp(date.today())
+    upcoming_leaves_count = 0
+    leaves_only = leaves[leaves.get("source_kind", "") != "biometrics"] if not leaves.empty else leaves
+    if not leaves_only.empty and "date_of_filing" in leaves_only.columns:
+        parsed_dates = pd.to_datetime(leaves_only["date_of_filing"], errors="coerce")
+        upcoming_leaves_count = int((parsed_dates >= today_ts).sum())
+
+    cols = st.columns(2)
+    cols[0].metric("Total Employees", f"{registered_employees:,}")
+    cols[1].metric("Ongoing / Upcoming Leaves", f"{upcoming_leaves_count:,}")
 
 
 def export_workbook_bytes(tables: dict[str, pd.DataFrame]) -> bytes:
