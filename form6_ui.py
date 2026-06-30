@@ -95,6 +95,30 @@ def inject_app_css():
         }
         div[data-testid="stMetricLabel"] { font-size: 0.95rem; font-weight: 600; }
         
+        /* 1. METRICS: FORCE HORIZONTAL SINGLE LINE FOR BOTH DESKTOP & MOBILE */
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 10px !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
+            width: auto !important;
+            flex: 1 1 0px !important; 
+        }
+
+        /* 2. CALENDAR: FACEBOOK COVER PHOTO ASPECT RATIO (820x312) */
+        iframe[title*="calendar" i],
+        .fb-cover-calendar iframe,
+        div[data-testid="stHtml"]:has(.fb-cover-calendar) {
+            width: 100% !important;
+            aspect-ratio: 820 / 312 !important;
+            height: auto !important;
+            object-fit: cover;
+            border: 1px solid var(--secondary-background-color);
+            border-radius: 8px;
+        }
+        
         .streamlit-expanderHeader { font-weight: 600; background-color: transparent; border-radius: 8px; }
         [data-testid="stSidebar"] { border-right: 1px solid var(--secondary-background-color); }
         
@@ -165,30 +189,13 @@ def inject_app_css():
                 padding: 0.75rem 1.25rem;
             }
 
-            /* Only stack generic horizontal blocks (filters, forms, etc).
-               Tables now use st.dataframe, which already scrolls natively,
-               so they are unaffected by this rule. */
+            /* Stack standard blocks contextually, ignoring metrics via priority above */
             div[data-testid="stHorizontalBlock"] {
                 flex-direction: column !important;
                 width: 100% !important;
             }
-
             div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
                 width: 100% !important;
-            }
-
-            /* Exception: metric rows (e.g. the Overview 2x2 grid) should stay
-               side-by-side in pairs on mobile instead of stacking to one
-               metric per row, which wastes vertical space. */
-            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
-                flex-direction: row !important;
-                flex-wrap: wrap !important;
-                gap: 0.6rem !important;
-            }
-            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
-                width: calc(50% - 0.3rem) !important;
-                flex: 1 1 calc(50% - 0.3rem) !important;
-                min-width: calc(50% - 0.3rem) !important;
             }
 
             div[data-testid="stMetric"] { padding: 0.85rem; }
