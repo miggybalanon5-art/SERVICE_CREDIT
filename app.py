@@ -1,715 +1,276 @@
-"""
-Authentication, session management, and the login/registration page for the
-Form 6 Tracker.
+From __future__ import annotations
 
-Split out of app.py so login/session logic can be read, tested, and modified
-on its own, without the rest of the app's tab-rendering code in the way.
-"""
-
-from __future__ import annotations
-
-import csv
-import hashlib
-from hmac import compare_digest
+import base64
+import html
 import os
-import re
-import secrets
 import sys
 import time
-from datetime import datetime
 
+import pandas as pd
 import streamlit as st
 
-from form6_cache import get_clean_state_frames
-from form6_store import ensure_database
+from form6_data import grade_sort_key
+from form6_store import db_counts, ensure_database
+from form6_cache import get_attendance_frame, get_clean_state_frames
+from form6_auth import (
+    LOGO_PATH,
+    clear_session_query_token,
+    get_session_query_token,
+    load_users,
+    log_action,
+    login_page,
+    perform_logout,
+    remove_browser_session,
+    restore_browser_session,
+    SESSION_TIMEOUT_MINUTES,
+)
+from form6_filters import apply_filters
+from form6_ui import date_bounds, inject_app_css, show_flash, show_pending_toast
+from employee_portal import employee_portal
 
-# ----------------------------------------------------------------
-# PATHS & CONSTANTS
-# ----------------------------------------------------------------
-if getattr(sys, "frozen", False):
+import tab_employees
+import tab_upcoming_leave
+import tab_newly_encoded
+import tab_import_backup
+import tab_help_assistant
+
+# ----------------------------------------------------------------------------
+# PATH SETUP & CONSTANTS
+# ----------------------------------------------------------------------------
+if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-USERS_FILE = os.path.join(BASE_DIR, "system_users.csv")
-BROWSER_SESSIONS_FILE = os.path.join(BASE_DIR, "browser_sessions.csv")
-LOG_FILE = os.path.join(BASE_DIR, "audit_log.csv")
-LOGO_PATH = os.path.join(BASE_DIR, "SCHOOL_LOGO.png")
+PAGE_TITLE = "Service Credit Tracker"
 
-SESSION_TIMEOUT_MINUTES = 30  # Inactivity timeout (still kicks users out after 30 min idle)
-SESSION_PERSISTENCE_DAYS = 7  # Token persistence across server restarts
-PASSWORD_HASH_ITERATIONS = 260_000
-PASSWORD_HASH_SCHEME = "pbkdf2_sha256"
-MAX_LOGIN_ATTEMPTS = 5
-LOCKOUT_SECONDS = 5 * 60
+st.set_page_config(page_title=PAGE_TITLE, layout="wide")
 
-ACCOUNT_STATUS_PENDING = "pending"
-ACCOUNT_STATUS_APPROVED = "approved"
-ACCOUNT_STATUS_REJECTED = "rejected"
 
+# ----------------------------------------------------------------------------
+# MAIN CORE TRACKER APP (sidebar, filters, tab routing)
+# ----------------------------------------------------------------------------
+def main_app():
+    inject_app_css()
 
-def _configured_secret(*names: str) -> str:
-    for name in names:
-        value = os.environ.get(name, "")
-        if value:
-            return value.strip()
-        try:
-            value = st.secrets.get(name, "")
-        except Exception:
-            value = ""
-        if value:
-            return str(value).strip()
-    return ""
+    ensure_database()
+    show_flash()
+    show_pending_toast()
 
+    employees_all, leave_all, credit_all, import_log = get_clean_state_frames()
+    attendance_all = get_attendance_frame()
 
-ADMIN_SECRET = _configured_secret("ADMIN_AUTH_CODE", "ADMIN_SECRET")
-EMPLOYEE_SECRET = _configured_secret("EMPLOYEE_AUTH_CODE", "EMPLOYEE_SECRET")
+    # --- BRAVE-INSPIRED BANNER FOR SIDEBAR WITH SCHOOL LOGO ---
+    logo_b64 = ""
+    if os.path.exists(LOGO_PATH):
+        with open(LOGO_PATH, "rb") as _lf:
+            logo_b64 = base64.b64encode(_lf.read()).decode()
 
+    logo_img_html = f'<img src="data:image/png;base64,{logo_b64}" alt="CNHS Logo">' if logo_b64 else ""
 
-def normalize_username(username: str) -> str:
-    return str(username or "").strip().lower()
-
-
-def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac(
-        "sha256",
-        str(password).encode("utf-8"),
-        salt.encode("utf-8"),
-        PASSWORD_HASH_ITERATIONS,
-    ).hex()
-    return f"{PASSWORD_HASH_SCHEME}${PASSWORD_HASH_ITERATIONS}${salt}${digest}"
-
-
-def legacy_sha256_password(password: str) -> str:
-    return hashlib.sha256(str(password).encode("utf-8")).hexdigest()
-
-
-def is_sha256_hash(value: str) -> bool:
-    return bool(re.fullmatch(r"[0-9a-f]{64}", str(value or "").strip().lower()))
-
-
-def is_pbkdf2_hash(value: str) -> bool:
-    parts = str(value or "").split("$")
-    if len(parts) != 4 or parts[0] != PASSWORD_HASH_SCHEME:
-        return False
-    try:
-        iterations = int(parts[1])
-    except ValueError:
-        return False
-    return iterations > 0 and bool(parts[2]) and bool(parts[3])
-
-
-def is_password_hash(value: str) -> bool:
-    return is_sha256_hash(value) or is_pbkdf2_hash(value)
-
-
-def verify_password(password: str, stored_hash: str) -> bool:
-    stored_hash = str(stored_hash or "").strip()
-    if is_sha256_hash(stored_hash):
-        return compare_digest(stored_hash, legacy_sha256_password(password))
-    if not is_pbkdf2_hash(stored_hash):
-        return False
-    _, iterations_raw, salt, expected = stored_hash.split("$", 3)
-    try:
-        iterations = int(iterations_raw)
-    except ValueError:
-        return False
-    actual = hashlib.pbkdf2_hmac(
-        "sha256",
-        str(password).encode("utf-8"),
-        salt.encode("utf-8"),
-        iterations,
-    ).hex()
-    return compare_digest(actual, expected)
-
-
-def check_password_strength(password: str) -> tuple[bool, str]:
-    if len(password) < 8:
-        return False, "Password must be at least 8 characters long."
-    if not re.search(r"[A-Z]", password):
-        return False, "Password must contain at least one uppercase letter."
-    if not re.search(r"\d", password):
-        return False, "Password must contain at least one number."
-    return True, "Strong password."
-
-
-def get_users_fieldnames() -> list[str]:
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE, mode="r", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                headers = next(reader, [])
-                if headers:
-                    return headers
-        except Exception:
-            pass
-    return ["username", "role", "password_hash", "failed_attempts", "lockout_until", "employee_id", "account_status"]
-
-
-def init_users():
-    if not os.path.exists(USERS_FILE):
-        with open(USERS_FILE, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(get_users_fieldnames())
-
-
-def load_users() -> dict:
-    init_users()
-    users = {}
-    with open(USERS_FILE, mode="r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            username = normalize_username(row.get("username", ""))
-            if username:
-                password_hash = str(row.get("password_hash", "")).strip()
-                role = str(row.get("role", "user")).strip() or "user"
-                if not is_password_hash(password_hash) and is_password_hash(role):
-                    password_hash, role = role, password_hash or "user"
-                employee_id_raw = str(row.get("employee_id", "") or "").strip()
-                employee_id = int(employee_id_raw) if employee_id_raw.isdigit() else None
-                account_status = str(row.get("account_status", "") or "").strip().lower()
-                if account_status not in (ACCOUNT_STATUS_PENDING, ACCOUNT_STATUS_APPROVED, ACCOUNT_STATUS_REJECTED):
-                    account_status = ACCOUNT_STATUS_APPROVED
-                try:
-                    failed_attempts = int(float(row.get("failed_attempts", "") or 0))
-                except (TypeError, ValueError):
-                    failed_attempts = 0
-                try:
-                    lockout_until = float(row.get("lockout_until", "") or 0)
-                except (TypeError, ValueError):
-                    lockout_until = 0.0
-                users[username] = {
-                    "hash": password_hash,
-                    "role": role.lower(),
-                    "employee_id": employee_id,
-                    "account_status": account_status,
-                    "failed_attempts": max(0, failed_attempts),
-                    "lockout_until": max(0.0, lockout_until),
-                }
-    return users
-
-
-def update_user_security_fields(
-    username: str,
-    *,
-    password_hash: str | None = None,
-    failed_attempts: int | None = None,
-    lockout_until: float | None = None,
-) -> bool:
-    username = normalize_username(username)
-    init_users()
-    fieldnames = get_users_fieldnames()
-    for field in ["password_hash", "failed_attempts", "lockout_until"]:
-        if field not in fieldnames:
-            fieldnames.append(field)
-
-    with open(USERS_FILE, mode="r", encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
-
-    changed = False
-    for row in rows:
-        if normalize_username(row.get("username", "")) != username:
-            continue
-        if password_hash is not None:
-            row["password_hash"] = password_hash
-        if failed_attempts is not None:
-            row["failed_attempts"] = str(max(0, int(failed_attempts)))
-        if lockout_until is not None:
-            row["lockout_until"] = str(max(0.0, float(lockout_until)))
-        changed = True
-        break
-
-    if not changed:
-        return False
-
-    with open(USERS_FILE, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({field: row.get(field, "") for field in fieldnames})
-    return True
-
-
-def save_new_user(
-    username: str,
-    password: str,
-    role: str = "user",
-    employee_id: int | None = None,
-    account_status: str | None = None,
-) -> bool:
-    username = normalize_username(username)
-    users = load_users()
-    if not username or username in users:
-        return False
-    if account_status is None:
-        account_status = ACCOUNT_STATUS_PENDING if role == "employee" else ACCOUNT_STATUS_APPROVED
-    fieldnames = get_users_fieldnames()
-    if "username" not in fieldnames:
-        fieldnames.insert(0, "username")
-    if "role" not in fieldnames:
-        fieldnames.append("role")
-    if "password_hash" not in fieldnames:
-        fieldnames.append("password_hash")
-    if "failed_attempts" not in fieldnames:
-        fieldnames.append("failed_attempts")
-    if "lockout_until" not in fieldnames:
-        fieldnames.append("lockout_until")
-    if "employee_id" not in fieldnames:
-        fieldnames.append("employee_id")
-    if "account_status" not in fieldnames:
-        fieldnames.append("account_status")
-    with open(USERS_FILE, mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        row = {field: "" for field in fieldnames}
-        row["username"] = username
-        row["role"] = role
-        row["password_hash"] = hash_password(password)
-        row["failed_attempts"] = "0"
-        row["lockout_until"] = "0"
-        row["employee_id"] = "" if employee_id is None else str(int(employee_id))
-        row["account_status"] = account_status
-        writer.writerow(row)
-    return True
-
-
-def set_account_status(username: str, account_status: str) -> bool:
-    if account_status not in (ACCOUNT_STATUS_PENDING, ACCOUNT_STATUS_APPROVED, ACCOUNT_STATUS_REJECTED):
-        raise ValueError(f"Invalid account_status: {account_status!r}")
-    username = normalize_username(username)
-    init_users()
-    fieldnames = get_users_fieldnames()
-    if "account_status" not in fieldnames:
-        fieldnames.append("account_status")
-    with open(USERS_FILE, mode="r", encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
-    found = False
-    for row in rows:
-        if normalize_username(row.get("username", "")) == username:
-            row["account_status"] = account_status
-            found = True
-            break
-    if not found:
-        return False
-    with open(USERS_FILE, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({field: row.get(field, "") for field in fieldnames})
-    return True
-
-
-def list_pending_accounts() -> list[dict]:
-    users = load_users()
-    return [
-        {"username": username, "employee_id": info.get("employee_id")}
-        for username, info in users.items()
-        if info.get("account_status") == ACCOUNT_STATUS_PENDING
-    ]
-
-
-def set_employee_link(username: str, employee_id: int | None, role: str | None = None) -> bool:
-    username = normalize_username(username)
-    init_users()
-    fieldnames = get_users_fieldnames()
-    if "employee_id" not in fieldnames:
-        fieldnames.append("employee_id")
-    if "account_status" not in fieldnames:
-        fieldnames.append("account_status")
-    with open(USERS_FILE, mode="r", encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
-    found = False
-    target_value = "" if employee_id is None else str(int(employee_id))
-    for row in rows:
-        row_user = normalize_username(row.get("username", ""))
-        if target_value and str(row.get("employee_id", "")).strip() == target_value and row_user != username:
-            row["employee_id"] = ""
-        if row_user == username:
-            found = True
-            if role is not None:
-                row["role"] = role
-            row["employee_id"] = target_value
-            if employee_id is not None:
-                row["account_status"] = ACCOUNT_STATUS_APPROVED
-    if not found:
-        return False
-    with open(USERS_FILE, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({field: row.get(field, "") for field in fieldnames})
-    return True
-
-
-def log_action(username: str, action: str, details: str):
-    file_exists = os.path.exists(LOG_FILE)
-    with open(LOG_FILE, mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["Timestamp", "User", "Action", "Details"])
-        writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), username, action, details])
-
-
-# ----------------------------------------------------------------
-# URL QUERY-PARAM TOKEN ROUND-TRIP
-# ----------------------------------------------------------------
-# These two functions are what let a logged-in session survive a browser
-# refresh: on login we stash the session token in the URL's ?session=...
-# query param, and on every fresh page load we read it back out so it can
-# be looked up against browser_sessions.csv. Streamlit 1.30+ exposes this
-# through the stable st.query_params mapping; the except branches are a
-# fallback for older Streamlit using the deprecated experimental API, kept
-# only as a safety net.
-def get_session_query_token() -> str:
-    try:
-        token = st.query_params.get("session", "")
-        if isinstance(token, list):
-            token = token[0] if token else ""
-        return str(token or "")
-    except Exception:
-        try:
-            params = st.experimental_get_query_params()
-            values = params.get("session", [])
-            return values[0] if values else ""
-        except Exception:
-            return ""
-
-
-def set_session_query_token(token: str):
-    try:
-        st.query_params["session"] = token
-    except Exception:
-        try:
-            params = st.experimental_get_query_params()
-            params["session"] = token
-            st.experimental_set_query_params(**params)
-        except Exception:
-            pass
-
-
-def clear_session_query_token():
-    try:
-        if "session" in st.query_params:
-            del st.query_params["session"]
-    except Exception:
-        try:
-            params = st.experimental_get_query_params()
-            if "session" in params:
-                del params["session"]
-            st.experimental_set_query_params(**params)
-        except Exception:
-            pass
-
-
-def _session_token_hash(token: str) -> str:
-    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
-
-
-def _session_row_matches(row: dict, token: str) -> bool:
-    if not token:
-        return False
-    stored_hash = str(row.get("token_hash", "") or "").strip().lower()
-    if stored_hash:
-        return compare_digest(stored_hash, _session_token_hash(token))
-    legacy_token = str(row.get("token", "") or "")
-    return bool(legacy_token) and compare_digest(legacy_token, token)
-
-
-def read_browser_sessions() -> list[dict]:
-    if not os.path.exists(BROWSER_SESSIONS_FILE):
-        return []
-    try:
-        with open(BROWSER_SESSIONS_FILE, mode="r", encoding="utf-8") as f:
-            return list(csv.DictReader(f))
-    except Exception:
-        return []
-
-
-def write_browser_sessions(rows: list[dict]):
-    with open(BROWSER_SESSIONS_FILE, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["token_hash", "username", "role", "created_at", "last_seen", "expires_at"])
-        for row in rows:
-            writer.writerow([
-                row.get("token_hash", ""), row.get("username", ""), row.get("role", "user"),
-                row.get("created_at", ""), row.get("last_seen", ""), row.get("expires_at", "")
-            ])
-
-
-def create_browser_session(username: str, role: str) -> str:
-    now = time.time()
-    token = secrets.token_urlsafe(32)
-    rows = []
-    for row in read_browser_sessions():
-        try:
-            if float(row.get("expires_at") or 0) > now:
-                rows.append(row)
-        except Exception:
-            pass
-    rows.append({
-        "token_hash": _session_token_hash(token), "username": username, "role": role,
-        "created_at": str(now), "last_seen": str(now),
-        "expires_at": str(now + (SESSION_PERSISTENCE_DAYS * 24 * 60 * 60)),
-    })
-    write_browser_sessions(rows)
-    return token
-
-
-def restore_browser_session(token: str) -> dict | None:
-    if not token:
-        return None
-    now = time.time()
-    users_db = load_users()
-    rows = read_browser_sessions()
-    kept_rows = []
-    restored = None
-    for row in rows:
-        try:
-            expires_at = float(row.get("expires_at") or 0)
-        except Exception:
-            expires_at = 0
-        username = normalize_username(row.get("username", ""))
-        if expires_at <= now or username not in users_db:
-            continue
-        if _session_row_matches(row, token):
-            row["username"] = username
-            row["role"] = users_db[username]["role"]
-            row["token_hash"] = _session_token_hash(token)
-            row["last_seen"] = str(now)
-            row["expires_at"] = str(now + (SESSION_PERSISTENCE_DAYS * 24 * 60 * 60))
-            restored = {
-                "username": username, "role": row["role"], "token": token,
-                "employee_id": users_db[username].get("employee_id"),
-                "account_status": users_db[username].get("account_status", ACCOUNT_STATUS_APPROVED),
-            }
-        kept_rows.append(row)
-    if len(kept_rows) != len(rows) or restored:
-        write_browser_sessions(kept_rows)
-    return restored
-
-
-def remove_browser_session(token: str):
-    if not token:
-        return
-    rows = [row for row in read_browser_sessions() if not _session_row_matches(row, token)]
-    write_browser_sessions(rows)
-
-
-def perform_logout() -> None:
-    log_action(st.session_state.current_user, "LOGOUT", "Session disconnected.")
-    remove_browser_session(st.session_state.get("session_token", ""))
-    clear_session_query_token()
-    st.session_state.logged_in = False
-    st.session_state.current_user = None
-    st.session_state.current_role = "user"
-    st.session_state.current_employee_id = None
-    st.session_state.current_account_status = None
-    st.session_state.session_token = ""
-    st.rerun()
-
-
-def login_page():
-    st.markdown(
-        """
+    st.sidebar.markdown(
+        f"""
         <style>
-        :root {
-            --meta-blue: #0064E0;
-            --meta-surface: var(--background-color);
-            --meta-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-            --meta-border-light: rgba(0,0,0,0.06);
-            --r-lg: 12px;
-        }
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --meta-border-light: rgba(255,255,255,0.07);
-                --meta-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
-            }
-        }
-        @keyframes slideUpFade {
-            from { opacity: 0; transform: translateY(12px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to   { opacity: 1; }
-        }
-        .theme-text { color: var(--text-color) !important; }
-        div[data-baseweb="input"] > div,
-        div[data-baseweb="textarea"] > div,
-        div[data-baseweb="select"] > div {
-            border: 1px solid color-mix(in srgb, var(--text-color) 16%, transparent) !important;
-            border-radius: 6px !important;
-            transition: border-color 0.15s ease-in-out;
-        }
-        div[data-baseweb="input"] > div:focus-within,
-        div[data-baseweb="textarea"] > div:focus-within,
-        div[data-baseweb="select"] > div:focus-within {
-            border-color: var(--meta-blue) !important;
-        }
+            .brave-style-header {{
+                position: relative; width: 100%; background-color: transparent;
+                margin-bottom: 15px; border-radius: 12px; overflow: hidden;
+                border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+            }}
+            .brave-top-nav {{
+                display: flex; flex-direction: column; justify-content: center; align-items: center;
+                text-align: center; padding: 18px 10px;
+                background-color: color-mix(in srgb, var(--secondary-background-color) 85%, transparent);
+                backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+                border-bottom: 1px solid color-mix(in srgb, var(--text-color) 10%, transparent);
+            }}
+            .brave-nav-left {{ display: flex; flex-direction: column; align-items: center; gap: 10px; }}
+            .brave-nav-left img {{ height: 42px; width: auto; object-fit: contain; }}
+            .brave-nav-title {{
+                color: var(--text-color); font-size: 14px; font-weight: 700; 
+                letter-spacing: -0.02em; display: flex; flex-direction: column; align-items: center; gap: 4px; line-height: 1.2;
+            }}
+            .brave-nav-subtitle {{ color: var(--primary-color, #0064E0); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }}
+            .brave-hero-banner {{
+                position: relative; height: 15px; background: var(--background-color);
+                display: flex; justify-content: center; align-items: center; overflow: hidden;
+                -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+                mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+            }}
         </style>
+        <div class="brave-style-header">
+            <div class="brave-top-nav">
+                <div class="brave-nav-left">
+                    {logo_img_html}
+                    <div class="brave-nav-title">Calauag National High School <span class="brave-nav-subtitle">Service Credit Tracker</span></div>
+                </div>
+            </div>
+            <div class="brave-hero-banner"></div>
+        </div>
         """,
         unsafe_allow_html=True
     )
 
-    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div style='animation: fadeIn 0.6s ease-out;'>"
-        "<h1 style='text-align: center; font-weight: 700; letter-spacing: -0.025em;' class='theme-text'>"
-        "CALAUAG NATIONAL HIGH SCHOOL</h1>",
+    current_usr = html.escape(str(st.session_state.get('current_user') or 'User').capitalize())
+    role_badge = "Admin" if st.session_state.get('current_role') == "admin" else "Staff"
+
+    st.sidebar.markdown(
+        f"<div style='background: var(--background-color); padding: 8px; border-radius: 8px; "
+        f"border: 0.5px solid var(--secondary-background-color); margin-bottom: 20px; text-align: center; '>"
+        f"<h3 style='margin: 0; font-size: 14px;'>Welcome, {current_usr}</h3>"
+        f"<p style='margin: 0; font-size: 12px; color: var(--primary-color, #0064E0); font-weight: 600;'>{role_badge} Access</p>"
+        f"</div>",
         unsafe_allow_html=True
     )
-    st.markdown(
-        "<p style='text-align: center; color: var(--meta-blue); font-weight: 600; margin-bottom: 20px;'>"
-        "Service Credit Tracker Portal</p></div>",
-        unsafe_allow_html=True
+
+    sidebar = st.sidebar
+    sidebar.header("Filters")
+    sidebar.caption("Narrow down what you see across every tab.")
+
+    grade_options = sorted([value for value in employees_all["grade"].dropna().unique().tolist() if value], key=grade_sort_key)
+    employee_options_all = [value for value in employees_all["employee_label"].dropna().unique().tolist() if value]
+    origin_options = sorted(
+        set([value for value in leave_all.get("source_kind", pd.Series(dtype=str)).dropna().unique().tolist() if value])
+        | set([value for value in credit_all.get("source_kind", pd.Series(dtype=str)).dropna().unique().tolist() if value])
+    )
+    leave_type_options = sorted([value for value in leave_all.get("leave_type", pd.Series(dtype=str)).dropna().unique().tolist() if value])
+    credit_scope_options = sorted([value for value in credit_all.get("credit_scope", pd.Series(dtype=str)).dropna().unique().tolist() if value])
+    min_date, max_date = date_bounds(leave_all, credit_all)
+
+    if st.session_state.pop("_sync_manage_to_filter", False):
+        st.session_state["filter_search_term"] = st.session_state.get("manage_search_term", "")
+
+    if "manage_search_term" not in st.session_state:
+        st.session_state["manage_search_term"] = st.session_state.get("filter_search_term", "")
+
+    def _sync_sidebar_search_to_manage() -> None:
+        st.session_state["manage_search_term"] = st.session_state.get("filter_search_term", "")
+
+    search_term = sidebar.text_input(
+        "Search name, position, or grade",
+        placeholder="Type to search...",
+        key="filter_search_term",
+        on_change=_sync_sidebar_search_to_manage,
     )
 
-    col_spacer1, col_form, col_spacer3 = st.columns([1, 1.2, 1])
+    with sidebar.expander("Grade & employee", expanded=False):
+        selected_grades = st.multiselect("Grades", grade_options, default=grade_options, key="filter_grades")
+        selected_employees = st.multiselect("Employees", employee_options_all, default=employee_options_all, key="filter_employees")
 
-    with col_form:
-        if time.time() < st.session_state.lockout_time:
-            rem = int((st.session_state.lockout_time - time.time()) / 60)
-            st.error(f"Too many failed attempts. Try again in {rem} minutes.")
-            return
+    with sidebar.expander("Record type", expanded=False):
+        selected_origins = st.multiselect("Record origin", origin_options, default=origin_options, key="filter_origins")
+        selected_leave_types = st.multiselect("Leave types", leave_type_options, default=leave_type_options, key="filter_leave_types")
+        selected_credit_scopes = st.multiselect("Credit scopes", credit_scope_options, default=credit_scope_options, key="filter_credit_scopes")
 
-        st.markdown(
-            "<div style='background: var(--meta-surface); padding: 30px; border-radius: var(--r-lg); "
-            "box-shadow: var(--meta-shadow); border: 1px solid var(--meta-border-light); "
-            "animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1);'>",
-            unsafe_allow_html=True
-        )
-
-        if os.path.exists(LOGO_PATH):
-            c_img1, c_img2, c_img3 = st.columns([1, 1.5, 1])
-            with c_img2: st.image(LOGO_PATH, use_container_width=True)
-
-        tab_login, tab_register = st.tabs([" Secure Login", " Create Account"])
-
-        with tab_login:
-            log_username = st.text_input("Username", key="log_user", placeholder="Enter your username")
-            log_password = st.text_input("Password", type="password", key="log_pass", placeholder="Enter your password")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Log In", key="btn_login", use_container_width=True):
-                log_username = normalize_username(log_username)
-                users_db = load_users()
-                user_record = users_db.get(log_username)
-                now = time.time()
-                if user_record and user_record.get("lockout_until", 0) > now:
-                    remaining = max(1, int((user_record["lockout_until"] - now) / 60) + 1)
-                    st.error(f"Too many failed attempts. Try again in {remaining} minute(s).")
-                    return
-
-                if user_record and verify_password(log_password, user_record["hash"]):
-                    if is_sha256_hash(user_record["hash"]):
-                        update_user_security_fields(log_username, password_hash=hash_password(log_password))
-                    update_user_security_fields(log_username, failed_attempts=0, lockout_until=0)
-                    st.session_state.failed_attempts = 0
-                    st.session_state.logged_in = True
-                    st.session_state.current_user = log_username
-                    st.session_state.current_role = user_record["role"]
-                    st.session_state.current_employee_id = user_record.get("employee_id")
-                    st.session_state.current_account_status = user_record.get("account_status", ACCOUNT_STATUS_APPROVED)
-                    session_token = create_browser_session(log_username, user_record["role"])
-                    st.session_state.session_token = session_token
-                    set_session_query_token(session_token)
-                    log_action(log_username, "LOGIN", "Successful connection established.")
-                    st.rerun()
-                else:
-                    if user_record:
-                        attempts = int(user_record.get("failed_attempts", 0)) + 1
-                        if attempts >= MAX_LOGIN_ATTEMPTS:
-                            update_user_security_fields(
-                                log_username,
-                                failed_attempts=attempts,
-                                lockout_until=now + LOCKOUT_SECONDS,
-                            )
-                            log_action(log_username, "LOCKOUT", "Exceeded max login attempts.")
-                            st.error("Too many failed attempts. Locked out for 5 minutes.")
-                            st.rerun()
-                        else:
-                            update_user_security_fields(log_username, failed_attempts=attempts)
-                            st.error("Invalid username or password.")
-                    else:
-                        st.session_state.failed_attempts += 1
-                        if st.session_state.failed_attempts >= MAX_LOGIN_ATTEMPTS:
-                            st.session_state.lockout_time = now + LOCKOUT_SECONDS
-                            log_action(log_username if log_username else "UNKNOWN", "LOCKOUT", "Exceeded max login attempts.")
-                            st.error("Too many failed attempts. Locked out for 5 minutes.")
-                            st.rerun()
-                        else:
-                            st.error("Invalid username or password.")
-
-        with tab_register:
-            reg_account_type = st.radio(
-                "Account type", ["Staff / Admin Account", "Employee Portal Account"],
-                horizontal=True, key="reg_account_type",
-                help="Employee Portal accounts can only view that one employee's own leave and service credit records.",
+    if min_date is not None and max_date is not None:
+        with sidebar.expander("Date range", expanded=False):
+            date_input = st.date_input(
+                "Leave date range",
+                value=(min_date.date(), max_date.date()),
+                min_value=min_date.date(),
+                max_value=max_date.date(),
+                key="filter_date_range",
             )
-            reg_username = st.text_input("New Username", key="reg_user")
-            reg_password = st.text_input("New Password", type="password", key="reg_pass")
-            reg_confirm = st.text_input("Confirm Password", type="password", key="reg_conf")
+            if isinstance(date_input, tuple) and len(date_input) == 2:
+                selected_date_range = (pd.to_datetime(date_input[0]), pd.to_datetime(date_input[1]))
+            else:
+                selected_date_range = (None, None)
+    else:
+        selected_date_range = (None, None)
 
-            reg_employee_id = None
-            reg_employee_available = True
-            if reg_account_type == "Employee Portal Account":
-                ensure_database()
-                portal_employees, _, _, _ = get_clean_state_frames()
-                users_for_links = load_users()
-                linked_ids = {u.get("employee_id") for u in users_for_links.values() if u.get("employee_id")}
-                available_employees = portal_employees[~portal_employees["id"].isin(linked_ids)] if not portal_employees.empty else portal_employees
-                if available_employees.empty:
-                    reg_employee_available = False
-                    st.info("Every employee record already has a linked portal account. Ask your administrator to link your account from Manage Employees.")
-                else:
-                    link_map = dict(zip(available_employees["employee_label"], available_employees["id"]))
-                    chosen_label = st.selectbox("This account belongs to", list(link_map.keys()), key="reg_employee_link")
-                    reg_employee_id = link_map[chosen_label]
-                st.caption(
-                    "Employee Portal accounts are view-only and limited to the linked employee's own records. "
-                    "An administrator will need to approve this link before you can see any records - you'll "
-                    "be able to log in right away, but you'll see a pending-approval message until then."
-                )
+    employees_filtered, summary_filtered, leave_filtered, credit_filtered = apply_filters(
+        employees_all, leave_all, credit_all, selected_grades, selected_employees, selected_origins,
+        selected_leave_types, selected_credit_scopes, search_term, selected_date_range,
+    )
 
-            is_employee_account = reg_account_type == "Employee Portal Account"
-            reg_secret_label = "Employee Authorization Code" if is_employee_account else "Admin Authorization Code"
-            reg_secret = st.text_input(reg_secret_label, type="password", key="reg_secret")
+    sidebar.markdown("---")
+    with sidebar.expander("Database info", expanded=False):
+        counts = db_counts()
+        st.write(f"{counts['employees']:,} employees")
+        st.write(f"{counts['leave_entries']:,} leave rows")
+        st.write(f"{counts['service_credits']:,} credit rows")
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Create Account", key="btn_register", use_container_width=True):
-                reg_username = normalize_username(reg_username)
-                required_secret = EMPLOYEE_SECRET if is_employee_account else ADMIN_SECRET
-                if not required_secret:
-                    st.error("Account creation is disabled until authorization codes are configured in Streamlit secrets or environment variables.")
-                elif not compare_digest(str(reg_secret or ""), required_secret):
-                    st.error("Access Denied: Incorrect Authorization Code.")
-                elif not reg_username or not reg_password:
-                    st.warning("All fields are required.")
-                elif reg_password != reg_confirm:
-                    st.error("Passwords do not match.")
-                elif is_employee_account and (not reg_employee_available or reg_employee_id is None):
-                    st.error("Please select which employee record this account belongs to.")
-                else:
-                    is_strong, msg = check_password_strength(reg_password)
-                    if not is_strong:
-                        st.error(f"Weak Password: {msg}")
-                    else:
-                        final_role = "employee" if is_employee_account else "user"
-                        if save_new_user(reg_username, reg_password, role=final_role, employee_id=reg_employee_id):
-                            log_action(
-                                "SYSTEM", "USER_CREATED",
-                                f"New {final_role} account created for {reg_username}"
-                                + (f" (requested link to employee_id={reg_employee_id}, pending admin approval)" if is_employee_account else "")
-                            )
-                            if is_employee_account:
-                                st.success(
-                                    f"Account for '{reg_username}' created! You can log in now, but an "
-                                    f"administrator needs to approve your employee link before you'll see "
-                                    f"any records."
-                                )
-                            else:
-                                st.success(f"Account for '{reg_username}' created successfully! Please log in.")
-                        else:
-                            st.error("Username already exists.")
+    sidebar.markdown("---")
+    sidebar.header("Navigation")
+    tab_options = ["Employees", "Ongoing/Upcoming Leave", "Newly Encoded", "Import / Backup", "Help & Assistant"]
+    active_tab = sidebar.radio("Go to", tab_options, label_visibility="collapsed", key="main_nav_tab")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+    # Logout Button on Sidebar
+    st.sidebar.markdown('<br>', unsafe_allow_html=True)
+    if st.sidebar.button("Log Out", use_container_width=True):
+        perform_logout()
+
+    st.header(PAGE_TITLE)
+    st.markdown(
+        '<div class="small-note">Leave and service credit records are encoded and stored directly in this app. '
+        'The old workbooks are used only as a one-time import source.</div>',
+        unsafe_allow_html=True,
+    )
+    if search_term.strip():
+        st.caption(f'Showing results matching: "{search_term.strip()}"')
+
+    # Each tab is rendered by its own module
+    # actually does any work, which keeps a click on (say) "Import / Backup"
+    # from re-running all the Employees-tab dataframe rendering as well.
+    if active_tab == "Employees":
+        tab_employees.render(employees_all, leave_all, credit_all, employees_filtered, summary_filtered, leave_filtered, credit_filtered, attendance_all)
+    elif active_tab == "Ongoing/Upcoming Leave":
+        tab_upcoming_leave.render(leave_filtered)
+    elif active_tab == "Newly Encoded":
+        tab_newly_encoded.render(leave_filtered, credit_filtered)
+    elif active_tab == "Import / Backup":
+        tab_import_backup.render(employees_all, leave_all)
+    elif active_tab == "Help & Assistant":
+        tab_help_assistant.render()
+
+
+# ----------------------------------------------------------------------------
+# APP EXECUTION ENTRY POINT
+# ----------------------------------------------------------------------------
+def main():
+    if "logged_in" not in st.session_state: st.session_state.logged_in = False
+    if "current_user" not in st.session_state: st.session_state.current_user = None
+    if "current_role" not in st.session_state: st.session_state.current_role = "user"
+    if "current_employee_id" not in st.session_state: st.session_state.current_employee_id = None
+    if "last_activity" not in st.session_state: st.session_state.last_activity = time.time()
+    if "failed_attempts" not in st.session_state: st.session_state.failed_attempts = 0
+    if "lockout_time" not in st.session_state: st.session_state.lockout_time = 0
+    if "session_token" not in st.session_state: st.session_state.session_token = get_session_query_token()
+
+    if not st.session_state.logged_in:
+        restored_session = restore_browser_session(st.session_state.session_token)
+        if restored_session:
+            st.session_state.logged_in = True
+            st.session_state.current_user = restored_session["username"]
+            st.session_state.current_role = restored_session["role"]
+            st.session_state.current_employee_id = restored_session.get("employee_id")
+            st.session_state.session_token = restored_session["token"]
+        elif st.session_state.session_token:
+            st.session_state.session_token = ""
+            clear_session_query_token()
+
+    if st.session_state.logged_in:
+        if time.time() - st.session_state.last_activity > (SESSION_TIMEOUT_MINUTES * 60):
+            log_action(st.session_state.current_user, "TIMEOUT", "Session expired due to inactivity.")
+            remove_browser_session(st.session_state.get("session_token", ""))
+            clear_session_query_token()
+            st.session_state.logged_in = False
+            st.session_state.current_user = None
+            st.session_state.current_role = "user"
+            st.session_state.current_employee_id = None
+            st.session_state.session_token = ""
+            st.warning(f"Session timed out after {SESSION_TIMEOUT_MINUTES} minutes of inactivity. Please log in again.")
+            st.rerun()
+        st.session_state.last_activity = time.time()
+
+    if not st.session_state.logged_in:
+        login_page()
+    else:
+        if st.session_state.current_role == "employee":
+            employee_portal()
+        else:
+            main_app()
+
+if __name__ == "__main__":
+    main()
+
+
