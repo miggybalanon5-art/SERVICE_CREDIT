@@ -53,7 +53,7 @@ def inject_app_css():
         
         /* Mobile-first structural containment */
         .block-container { 
-            padding: 1rem 0.5rem !important; /* Slightly tighter container padding */
+            padding: 1rem 0.75rem !important;
             max-width: 100% !important;
         }
         
@@ -66,7 +66,7 @@ def inject_app_css():
         /* --- High-Affordance Touch Targets (Minimum 48px height) --- */
         .stButton > button, 
         .stDownloadButton > button {
-            width: 100% !important; 
+            width: 100% !important; /* Stack actions naturally by default on mobile screens */
             background-color: var(--primary-color, #0064E0);
             color: #FFFFFF !important;
             border: none;
@@ -87,6 +87,7 @@ def inject_app_css():
             transform: scale(0.98);
         }
         
+        /* Secondary Action Alternates */
         .stDownloadButton > button {
             background-color: var(--secondary-background-color, #F0F2F6);
             color: var(--text-color, #31333F) !important;
@@ -96,48 +97,49 @@ def inject_app_css():
             background-color: color-mix(in srgb, var(--text-color) 8%, var(--secondary-background-color, #F0F2F6));
         }
         
-        /* --- Aggressive Forced Single-Line Metrics (Mobile Fix) --- */
+        /* --- Responsive Fluid Metric System (Forced Single Line) --- */
         div[data-testid="stMetric"] {
             background-color: var(--background-color);
             border: 1px solid color-mix(in srgb, var(--text-color) 10%, transparent);
-            border-radius: 6px; 
-            padding: 4px 6px !important; /* Ultra-tight padding to fit 4 blocks */
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+            border-radius: 8px; /* Slightly tighter curves */
+            padding: 0.5rem !important; /* Reduced padding to fit 4 columns */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
             width: 100%;
         }
         div[data-testid="stMetricValue"] {
             color: var(--primary-color, #0064E0);
-            font-size: 1.1rem !important; /* Smaller text to ensure no wrapping */
+            font-size: 1.25rem !important; /* Scaled down to prevent overlapping */
             font-weight: 700;
             line-height: 1.1;
         }
         div[data-testid="stMetricLabel"] { 
-            font-size: 0.55rem !important; /* Tiny but legible */
+            font-size: 0.65rem !important; /* Scaled down for narrow columns */
             font-weight: 600; 
             text-transform: uppercase; 
-            letter-spacing: 0.01em;
+            letter-spacing: 0.02em;
             opacity: 0.8;
             white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis; /* Shrinks long text with '...' */
+            text-overflow: ellipsis; /* Adds '...' if label is too long */
         }
         
-        /* Block Streamlit from stacking columns if they hold metrics */
+        /* Metric container wrap-engine (Forced Single Line) */
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
             display: flex !important;
-            flex-direction: row !important; /* Force row layout globally */
-            flex-wrap: nowrap !important; /* Absolutely no wrapping */
-            gap: 4px !important; /* Tiny gap between boxes */
+            flex-direction: row !important; /* Forces horizontal alignment */
+            flex-wrap: nowrap !important; /* Prevents stacking */
+            gap: 6px !important; /* Tighter gap between cards */
             padding: 0 !important;
-            width: 100% !important;
+            overflow-x: auto; /* Allows smooth horizontal scrolling if screen is ultra-narrow */
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Hides scrollbar on Firefox */
         }
-        
-        /* Force the columns themselves to shrink-fit side by side */
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"])::-webkit-scrollbar {
+            display: none; /* Hides scrollbar on Chrome/Safari/Edge */
+        }
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
-            width: auto !important;
             flex: 1 1 0px !important;
-            min-width: 0 !important; /* Critical: allows columns to squeeze smaller than content if needed */
-            padding: 0 !important;
+            min-width: 0 !important; /* Allows columns to squeeze down */
         }
 
         /* --- Native Embedded Frame Constraints --- */
@@ -145,7 +147,7 @@ def inject_app_css():
         .fb-cover-calendar iframe,
         div[data-testid="stHtml"]:has(.fb-cover-calendar) {
             width: 100% !important;
-            aspect-ratio: 16 / 10 !important; 
+            aspect-ratio: 16 / 10 !important; /* Upgraded from ultra-wide desktop aspect ratio for high mobile clarity */
             height: auto !important;
             border-radius: 10px;
             border: 1px solid var(--secondary-background-color);
@@ -156,7 +158,7 @@ def inject_app_css():
             gap: 8px;
             border-bottom: 2px solid var(--secondary-background-color);
             overflow-x: auto;
-            scrollbar-width: none; 
+            scrollbar-width: none; /* Hide standard desktop scrollbars */
             -webkit-overflow-scrolling: touch;
         }
         .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
@@ -211,10 +213,10 @@ def inject_app_css():
                 aspect-ratio: 820 / 312 !important;
             }
             
-            /* Give metrics their original breathing room back on desktop */
+            /* Give metrics more breathing room on desktop */
             div[data-testid="stMetricValue"] { font-size: 1.75rem !important; }
             div[data-testid="stMetricLabel"] { font-size: 0.85rem !important; }
-            div[data-testid="stMetric"] { padding: 1rem !important; border-radius: 12px; }
+            div[data-testid="stMetric"] { padding: 1rem !important; }
             div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) { gap: 12px !important; }
         }
         </style>
