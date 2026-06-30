@@ -141,17 +141,6 @@ def inject_app_css():
             flex: 1 1 0px !important;
             min-width: 0 !important; /* Allows columns to squeeze down */
         }
-
-        /* --- Native Embedded Frame Constraints --- */
-        iframe[title*="calendar" i],
-        .fb-cover-calendar iframe,
-        div[data-testid="stHtml"]:has(.fb-cover-calendar) {
-            width: 100% !important;
-            aspect-ratio: 16 / 10 !important; /* Upgraded from ultra-wide desktop aspect ratio for high mobile clarity */
-            height: auto !important;
-            border-radius: 10px;
-            border: 1px solid var(--secondary-background-color);
-        }
         
         /* --- Mobile-First Layout Tabs & Inputs --- */
         .stTabs [data-baseweb="tab-list"] {
@@ -208,9 +197,6 @@ def inject_app_css():
             }
             .stButton > button, .stDownloadButton > button {
                 width: auto !important;
-            }
-            iframe[title*="calendar" i] {
-                aspect-ratio: 820 / 312 !important;
             }
             
             /* Give metrics more breathing room on desktop */
