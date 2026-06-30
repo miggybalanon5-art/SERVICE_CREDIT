@@ -17,7 +17,6 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-# Excel export styles
 HEADER_FILL = PatternFill("solid", fgColor="0064E0")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 LIGHT_BORDER = Border(
@@ -27,8 +26,6 @@ LIGHT_BORDER = Border(
     bottom=Side(style="thin", color="CED0D4"),
 )
 
-# Shared "keep it easy to digest" presentation maps: hide internal bookkeeping
-# columns (ids, source metadata, raw day-split) and use human-friendly headers.
 LEAVE_INTERNAL_COLS = ["id", "employee_id", "source_kind", "source_ref", "no_days", "no_halfdays"]
 LEAVE_DISPLAY_RENAME = {
     "date_of_filing": "Date Filed", "month": "Month", "leave_type": "Leave Type",
@@ -42,11 +39,7 @@ CREDIT_DISPLAY_RENAME = {
 }
 
 
-# ----------------------------------------------------------------------------
-# CSS INJECTION
-# ----------------------------------------------------------------------------
 def inject_app_css():
-    # CSS Injection with dynamic variables
     st.markdown(
         """
         <style>
@@ -73,6 +66,7 @@ def inject_app_css():
             font-weight: 600;
             box-shadow: none;
             transition: opacity 0.2s;
+            min-height: 44px;
         }
         .stButton > button:hover { opacity: 0.9; color: #FFFFFF; }
         .stButton > button:active { opacity: 0.8; color: #FFFFFF; }
@@ -83,6 +77,7 @@ def inject_app_css():
             border: none;
             border-radius: 6px;
             font-weight: 600;
+            min-height: 44px;
         }
         .stDownloadButton > button:hover { opacity: 0.8; color: var(--text-color); }
         
@@ -108,7 +103,7 @@ def inject_app_css():
         .stTabs [aria-selected="true"] { color: var(--primary-color, #0064E0) !important; border-bottom: 3px solid var(--primary-color, #0064E0) !important; }
         
         div[role="radiogroup"] { flex-direction: row; flex-wrap: wrap; gap: 12px; padding-bottom: 15px; margin-bottom: 20px; }
-        div[role="radiogroup"] label { background-color: var(--background-color); border: 1px solid var(--secondary-background-color); border-radius: 20px; padding: 8px 18px; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        div[role="radiogroup"] label { background-color: var(--background-color); border: 1px solid var(--secondary-background-color); border-radius: 20px; padding: 8px 18px; font-weight: 600; }
         div[role="radiogroup"] label[data-checked="true"] { background-color: var(--secondary-background-color); border-color: var(--primary-color, #0064E0); color: var(--primary-color, #0064E0); }
         
         [data-testid="stForm"] { background-color: var(--background-color); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--secondary-background-color); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
@@ -120,7 +115,6 @@ def inject_app_css():
         .small-note { font-size: 0.95rem; margin-bottom: 1rem; opacity: 0.8; }
         .section-divider { margin: 1.5rem 0; border-top: 1px solid var(--secondary-background-color); }
 
-        /* Subtle thin borders on form-style inputs so fields are easy to spot at a glance */
         div[data-baseweb="input"] > div,
         div[data-baseweb="textarea"] > div,
         div[data-baseweb="select"] > div,
@@ -137,26 +131,89 @@ def inject_app_css():
         div[data-baseweb="select"] > div:focus-within {
             border-color: var(--primary-color, #0064E0) !important;
         }
+
+        @media (max-width: 768px) {
+            .block-container {
+                padding-top: 1rem;
+                padding-bottom: 1rem;
+                max-width: 100%;
+            }
+
+            h1 { font-size: 1.75rem; }
+            h2 { font-size: 1.5rem; }
+            h3 { font-size: 1.25rem; }
+
+            .stButton > button,
+            .stDownloadButton > button {
+                min-height: 48px;
+                font-size: 1rem;
+                padding: 0.75rem 1.25rem;
+            }
+
+            div[data-testid="stHorizontalBlock"] {
+                flex-direction: column !important;
+                width: 100% !important;
+            }
+
+            .streamlit-expanderHeader {
+                padding: 1rem;
+                font-size: 1.05rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.25rem; }
+
+            .stButton > button,
+            .stDownloadButton > button {
+                min-height: 44px;
+                font-size: 0.95rem;
+                padding: 0.65rem 1rem;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 
-# ----------------------------------------------------------------------------
-# KEYED TABS (native tab UI, selection survives reruns when supported)
-# ----------------------------------------------------------------------------
+def confirm_destructive_action(action_id: str, action_label: str, action_type: str = "delete") -> bool:
+    confirm_key = f"_confirm_{action_id}"
+    
+    if st.session_state.get(confirm_key):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.warning(f"⚠️ This {action_type} cannot be undone!")
+        with col2:
+            if st.button("❌ Cancel", key=f"cancel_{action_id}", use_container_width=True):
+                st.session_state[confirm_key] = False
+                st.rerun()
+        
+        confirm_col, warning_col = st.columns([1, 1.5])
+        with confirm_col:
+            if st.button(f"✓ Confirm {action_type.title()}", key=f"confirm_{action_id}", 
+                        use_container_width=True, type="primary"):
+                st.session_state[confirm_key] = False
+                return True
+        
+        with warning_col:
+            st.caption(f"Click 'Confirm {action_type.title()}' to proceed.")
+        
+        return False
+    else:
+        st.session_state[confirm_key] = True
+        st.warning(f"⚠️ Are you sure you want to {action_type} {action_label}? Click the button again to confirm.")
+        st.rerun()
+
+
 def keyed_tabs(labels: list[str], session_key: str):
-    """Create st.tabs with a stable key so the active tab persists across reruns."""
     try:
         return st.tabs(labels, key=session_key)
     except TypeError:
         return st.tabs(labels)
 
 
-# ----------------------------------------------------------------------------
-# FLASH / TOAST MESSAGING (survive st.rerun())
-# ----------------------------------------------------------------------------
 def flash(message: str, kind: str = "success") -> None:
     st.session_state["flash_message"] = {"message": message, "kind": kind}
 
@@ -172,7 +229,6 @@ def show_flash() -> None:
 
 
 def queue_toast(message: str, icon: str = "✅") -> None:
-    """Queue a toast to survive the st.rerun() that follows most save actions."""
     st.session_state["pending_toast"] = {"message": message, "icon": icon}
 
 
@@ -182,9 +238,6 @@ def show_pending_toast() -> None:
     st.toast(payload.get("message", ""), icon=payload.get("icon", "✅"))
 
 
-# ----------------------------------------------------------------------------
-# FORMATTING / VIEW HELPERS
-# ----------------------------------------------------------------------------
 def safe_text(value) -> str:
     if value is None: return ""
     if isinstance(value, float) and pd.isna(value): return ""
@@ -230,9 +283,6 @@ def render_metrics(employees: pd.DataFrame, leaves: pd.DataFrame) -> None:
     registered_employees = len(employees)
     today_ts = pd.Timestamp(date.today())
     upcoming_leaves_count = 0
-    # Exclude biometrics-sourced deductions (ABSENT/LATE) - they're not leave
-    # the employee filed, so they shouldn't inflate this count. Same fix as
-    # applied to the Upcoming Leave tab and the Leave Ledger.
     leaves_only = leaves[leaves.get("source_kind", "") != "biometrics"] if not leaves.empty else leaves
     if not leaves_only.empty and "date_of_filing" in leaves_only.columns:
         parsed_dates = pd.to_datetime(leaves_only["date_of_filing"], errors="coerce")
@@ -243,9 +293,6 @@ def render_metrics(employees: pd.DataFrame, leaves: pd.DataFrame) -> None:
     cols[1].metric("Ongoing / Upcoming Leaves", f"{upcoming_leaves_count:,}")
 
 
-# ----------------------------------------------------------------------------
-# EXCEL / DB EXPORT
-# ----------------------------------------------------------------------------
 def export_workbook_bytes(tables: dict[str, pd.DataFrame]) -> bytes:
     workbook = Workbook()
     workbook.remove(workbook.active)

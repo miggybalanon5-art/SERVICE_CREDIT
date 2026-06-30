@@ -23,9 +23,9 @@ import streamlit as st
 from form6_cache import get_clean_state_frames
 from form6_store import ensure_database
 
-# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------
 # PATHS & CONSTANTS
-# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------
 if getattr(sys, "frozen", False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
@@ -43,16 +43,6 @@ PASSWORD_HASH_SCHEME = "pbkdf2_sha256"
 MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_SECONDS = 5 * 60
 
-# Self-registered Employee Portal accounts pick their own employee_id from a
-# dropdown during signup with no verification that the person registering
-# actually IS that employee - anyone who has the shared EMPLOYEE_SECRET
-# code can claim any unclaimed employee's record. ACCOUNT_STATUS exists to
-# close that gap: new employee accounts are created PENDING and can log in,
-# but employee_portal.py shows an "awaiting approval" screen instead of any
-# real data until an admin explicitly approves the employee_id link (see
-# the Account Approvals section in tab_employees.py). Staff/Admin accounts
-# are approved immediately - they're already gated by ADMIN_SECRET and
-# don't carry an employee_id link to misuse.
 ACCOUNT_STATUS_PENDING = "pending"
 ACCOUNT_STATUS_APPROVED = "approved"
 ACCOUNT_STATUS_REJECTED = "rejected"
@@ -76,9 +66,6 @@ ADMIN_SECRET = _configured_secret("ADMIN_AUTH_CODE", "ADMIN_SECRET")
 EMPLOYEE_SECRET = _configured_secret("EMPLOYEE_AUTH_CODE", "EMPLOYEE_SECRET")
 
 
-# ----------------------------------------------------------------------------
-# PASSWORD / USERNAME HELPERS
-# ----------------------------------------------------------------------------
 def normalize_username(username: str) -> str:
     return str(username or "").strip().lower()
 
@@ -147,9 +134,6 @@ def check_password_strength(password: str) -> tuple[bool, str]:
     return True, "Strong password."
 
 
-# ----------------------------------------------------------------------------
-# USERS CSV STORAGE
-# ----------------------------------------------------------------------------
 def get_users_fieldnames() -> list[str]:
     if os.path.exists(USERS_FILE):
         try:
@@ -184,12 +168,6 @@ def load_users() -> dict:
                     password_hash, role = role, password_hash or "user"
                 employee_id_raw = str(row.get("employee_id", "") or "").strip()
                 employee_id = int(employee_id_raw) if employee_id_raw.isdigit() else None
-                # Backward compatibility: accounts created before this column
-                # existed have a blank account_status. Treat blank as already
-                # approved rather than locking out every pre-existing employee
-                # account the moment this update ships - the approval gate is
-                # meant to catch NEW unverified signups going forward, not
-                # retroactively block people who were already using the app.
                 account_status = str(row.get("account_status", "") or "").strip().lower()
                 if account_status not in (ACCOUNT_STATUS_PENDING, ACCOUNT_STATUS_APPROVED, ACCOUNT_STATUS_REJECTED):
                     account_status = ACCOUNT_STATUS_APPROVED
@@ -265,9 +243,6 @@ def save_new_user(
     if not username or username in users:
         return False
     if account_status is None:
-        # Self-registered employee accounts start PENDING and need an admin
-        # to approve the employee_id link before any real data is shown.
-        # Staff/Admin accounts are approved immediately.
         account_status = ACCOUNT_STATUS_PENDING if role == "employee" else ACCOUNT_STATUS_APPROVED
     fieldnames = get_users_fieldnames()
     if "username" not in fieldnames:
@@ -299,9 +274,6 @@ def save_new_user(
 
 
 def set_account_status(username: str, account_status: str) -> bool:
-    """Admin action: approve or reject a pending Employee Portal account's
-    employee_id link. Until approved, employee_portal.py refuses to show
-    that account's real data regardless of what employee_id is stored."""
     if account_status not in (ACCOUNT_STATUS_PENDING, ACCOUNT_STATUS_APPROVED, ACCOUNT_STATUS_REJECTED):
         raise ValueError(f"Invalid account_status: {account_status!r}")
     username = normalize_username(username)
@@ -328,8 +300,6 @@ def set_account_status(username: str, account_status: str) -> bool:
 
 
 def list_pending_accounts() -> list[dict]:
-    """Returns every account currently awaiting admin approval, as a list
-    of {username, employee_id} dicts, for the admin Account Approvals UI."""
     users = load_users()
     return [
         {"username": username, "employee_id": info.get("employee_id")}
@@ -339,15 +309,6 @@ def list_pending_accounts() -> list[dict]:
 
 
 def set_employee_link(username: str, employee_id: int | None, role: str | None = None) -> bool:
-    """Link/relink/unlink a user account to an employee record. Enforces a 1:1 link by
-    releasing the employee from any other account that currently holds it.
-
-    When an admin sets a real (non-None) link through this function, the
-    account is also auto-approved - an admin manually choosing the link
-    removes the unverified self-claim risk that account_status exists to
-    guard against in the first place. Setting employee_id back to None
-    (unlinking) does NOT change account_status, so re-linking later still
-    goes through this same approved path rather than silently re-pending."""
     username = normalize_username(username)
     init_users()
     fieldnames = get_users_fieldnames()
@@ -380,9 +341,6 @@ def set_employee_link(username: str, employee_id: int | None, role: str | None =
     return True
 
 
-# ----------------------------------------------------------------------------
-# AUDIT LOG
-# ----------------------------------------------------------------------------
 def log_action(username: str, action: str, details: str):
     file_exists = os.path.exists(LOG_FILE)
     with open(LOG_FILE, mode="a", newline="", encoding="utf-8") as f:
@@ -392,16 +350,12 @@ def log_action(username: str, action: str, details: str):
         writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), username, action, details])
 
 
-# ----------------------------------------------------------------------------
-# QUERY-PARAM SESSION TOKEN (for browser-refresh persistence)
-# ----------------------------------------------------------------------------
 def get_session_query_token() -> str:
     clear_session_query_token()
     return ""
 
 
 def set_session_query_token(token: str):
-    # Deliberately no-op: auth tokens must not be placed in URLs.
     return
 
 
@@ -419,9 +373,6 @@ def clear_session_query_token():
             pass
 
 
-# ----------------------------------------------------------------------------
-# BROWSER SESSION PERSISTENCE (CSV-backed) - 7 DAY TOKENS
-# ----------------------------------------------------------------------------
 def _session_token_hash(token: str) -> str:
     return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
 
@@ -458,8 +409,6 @@ def write_browser_sessions(rows: list[dict]):
 
 
 def create_browser_session(username: str, role: str) -> str:
-    """Create a new browser session token valid for SESSION_PERSISTENCE_DAYS (7 days).
-    This allows users to stay logged in across server restarts."""
     now = time.time()
     token = secrets.token_urlsafe(32)
     rows = []
@@ -472,14 +421,13 @@ def create_browser_session(username: str, role: str) -> str:
     rows.append({
         "token_hash": _session_token_hash(token), "username": username, "role": role,
         "created_at": str(now), "last_seen": str(now),
-        "expires_at": str(now + (SESSION_PERSISTENCE_DAYS * 24 * 60 * 60)),  # 7 days
+        "expires_at": str(now + (SESSION_PERSISTENCE_DAYS * 24 * 60 * 60)),
     })
     write_browser_sessions(rows)
     return token
 
 
 def restore_browser_session(token: str) -> dict | None:
-    """Restore a session from a token. Extends expiration if valid. Returns session data or None."""
     if not token:
         return None
     now = time.time()
@@ -500,7 +448,7 @@ def restore_browser_session(token: str) -> dict | None:
             row["role"] = users_db[username]["role"]
             row["token_hash"] = _session_token_hash(token)
             row["last_seen"] = str(now)
-            row["expires_at"] = str(now + (SESSION_PERSISTENCE_DAYS * 24 * 60 * 60))  # Extend 7 days
+            row["expires_at"] = str(now + (SESSION_PERSISTENCE_DAYS * 24 * 60 * 60))
             restored = {
                 "username": username, "role": row["role"], "token": token,
                 "employee_id": users_db[username].get("employee_id"),
@@ -532,11 +480,7 @@ def perform_logout() -> None:
     st.rerun()
 
 
-# ----------------------------------------------------------------------------
-# LOGIN / REGISTRATION PAGE
-# ----------------------------------------------------------------------------
 def login_page():
-    # Insert Login-specific Custom CSS
     st.markdown(
         """
         <style>
@@ -562,8 +506,6 @@ def login_page():
             to   { opacity: 1; }
         }
         .theme-text { color: var(--text-color) !important; }
-
-        /* Subtle thin borders on form-style inputs so fields are easy to spot at a glance */
         div[data-baseweb="input"] > div,
         div[data-baseweb="textarea"] > div,
         div[data-baseweb="select"] > div {
