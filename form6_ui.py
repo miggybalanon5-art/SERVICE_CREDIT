@@ -97,39 +97,49 @@ def inject_app_css():
             background-color: color-mix(in srgb, var(--text-color) 8%, var(--secondary-background-color, #F0F2F6));
         }
         
-        /* --- Responsive Fluid Metric System --- */
+        /* --- Responsive Fluid Metric System (Forced Single Line) --- */
         div[data-testid="stMetric"] {
             background-color: var(--background-color);
             border: 1px solid color-mix(in srgb, var(--text-color) 10%, transparent);
-            border-radius: 12px;
-            padding: 1rem !important;
+            border-radius: 8px; /* Slightly tighter curves */
+            padding: 0.5rem !important; /* Reduced padding to fit 4 columns */
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
             width: 100%;
         }
         div[data-testid="stMetricValue"] {
             color: var(--primary-color, #0064E0);
-            font-size: 1.75rem !important;
+            font-size: 1.25rem !important; /* Scaled down to prevent overlapping */
             font-weight: 700;
             line-height: 1.1;
         }
         div[data-testid="stMetricLabel"] { 
-            font-size: 0.85rem !important; 
+            font-size: 0.65rem !important; /* Scaled down for narrow columns */
             font-weight: 600; 
             text-transform: uppercase; 
-            letter-spacing: 0.05em;
+            letter-spacing: 0.02em;
             opacity: 0.8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis; /* Adds '...' if label is too long */
         }
         
-        /* Metric container wrap-engine */
+        /* Metric container wrap-engine (Forced Single Line) */
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
             display: flex !important;
-            flex-flow: row wrap !important;
-            gap: 8px !important;
+            flex-direction: row !important; /* Forces horizontal alignment */
+            flex-wrap: nowrap !important; /* Prevents stacking */
+            gap: 6px !important; /* Tighter gap between cards */
             padding: 0 !important;
+            overflow-x: auto; /* Allows smooth horizontal scrolling if screen is ultra-narrow */
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Hides scrollbar on Firefox */
+        }
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"])::-webkit-scrollbar {
+            display: none; /* Hides scrollbar on Chrome/Safari/Edge */
         }
         div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
-            flex: 1 1 calc(50% - 4px) !important;
-            min-width: 140px !important;
+            flex: 1 1 0px !important;
+            min-width: 0 !important; /* Allows columns to squeeze down */
         }
 
         /* --- Native Embedded Frame Constraints --- */
@@ -196,15 +206,18 @@ def inject_app_css():
                 padding: 2rem 1.5rem !important;
                 max-width: 1100px !important;
             }
-            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="column"] {
-                flex: 1 1 0px !important;
-            }
             .stButton > button, .stDownloadButton > button {
                 width: auto !important;
             }
             iframe[title*="calendar" i] {
                 aspect-ratio: 820 / 312 !important;
             }
+            
+            /* Give metrics more breathing room on desktop */
+            div[data-testid="stMetricValue"] { font-size: 1.75rem !important; }
+            div[data-testid="stMetricLabel"] { font-size: 0.85rem !important; }
+            div[data-testid="stMetric"] { padding: 1rem !important; }
+            div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) { gap: 12px !important; }
         }
         </style>
         """,
