@@ -77,20 +77,8 @@ def clear_streamlit_cache() -> None:
 # CONNECTION HELPER
 # ----------------------------------------------------------------------------
 def ensure_connection():
-    return _ConnectionContext()
-
-
-class _ConnectionContext:
-    def __enter__(self):
-        from form6_store import connect
-        self.conn = connect()
-        return self.conn
-
-    def __exit__(self, exc_type, exc, tb):
-        if exc_type is None: self.conn.commit()
-        self.conn.close()
-        return False
-
+    """Returns a connection to the Neon PostgreSQL database."""
+    return st.connection("postgresql", type="sql")
 
 def clean_required_text(value: str) -> str:
     return str(value).strip()
