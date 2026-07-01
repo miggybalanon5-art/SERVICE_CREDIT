@@ -425,12 +425,14 @@ def render(employees_all, leave_all, credit_all, employees_filtered, summary_fil
                             r_cols[4].write(leave_row.get("inclusive_dates", "") or "-")
                             r_cols[5].write(leave_row.get("service_credit_availed", "") or "-")
                             with r_cols[6]:
-                                if st.button("Delete", key=f"leave_delete_{leave_id}", help="Remove this leave record", use_container_width=True):
-                                    if confirm_destructive_action(f"leave_{leave_id}", f"leave record for {emp_label}", "delete"):
-                                        delete_leave_entry_by_id(leave_id)
-                                        clear_streamlit_cache()
-                                        flash(f"Removed leave record for {emp_label}.")
-                                        st.rerun()
+                                if confirm_destructive_action(
+                                    f"leave_{leave_id}", f"leave record for {emp_label}", "delete",
+                                    help_text="Remove this leave record",
+                                ):
+                                    delete_leave_entry_by_id(leave_id)
+                                    clear_streamlit_cache()
+                                    flash(f"Removed leave record for {emp_label}.")
+                                    st.rerun()
 
         with ledger_tabs[1]:
             st.subheader("Deductions Ledger (Lates & Absents)")
@@ -460,12 +462,14 @@ def render(employees_all, leave_all, credit_all, employees_filtered, summary_fil
                             r_cols[3].write(ded_row.get("service_credit_availed", "") or "-")
                             r_cols[4].write(ded_row.get("source_ref", "") or "-")
                             with r_cols[5]:
-                                if st.button("Delete", key=f"deduction_delete_{ded_id}", help="Remove this deduction", use_container_width=True):
-                                    if confirm_destructive_action(f"deduction_{ded_id}", f"deduction for {emp_label}", "delete"):
-                                        delete_leave_entry_by_id(ded_id)
-                                        clear_streamlit_cache()
-                                        flash(f"Removed deduction for {emp_label}.")
-                                        st.rerun()
+                                if confirm_destructive_action(
+                                    f"deduction_{ded_id}", f"deduction for {emp_label}", "delete",
+                                    help_text="Remove this deduction",
+                                ):
+                                    delete_leave_entry_by_id(ded_id)
+                                    clear_streamlit_cache()
+                                    flash(f"Removed deduction for {emp_label}.")
+                                    st.rerun()
 
         with ledger_tabs[2]:
             st.subheader("Service Credit Ledger (By Employee)")
@@ -491,12 +495,14 @@ def render(employees_all, leave_all, credit_all, employees_filtered, summary_fil
                             r_cols[2].write(credit_row.get("service_attended", ""))
                             r_cols[3].write(f"{credit_row.get('credit_units', 0):.1f}")
                             with r_cols[4]:
-                                if st.button("Delete", key=f"credit_delete_{credit_id}", help="Remove this service credit record", use_container_width=True):
-                                    if confirm_destructive_action(f"credit_{credit_id}", f"service credit for {emp_label}", "delete"):
-                                        delete_credit_entry_by_id(credit_id)
-                                        clear_streamlit_cache()
-                                        flash(f"Removed service credit record for {emp_label}.")
-                                        st.rerun()
+                                if confirm_destructive_action(
+                                    f"credit_{credit_id}", f"service credit for {emp_label}", "delete",
+                                    help_text="Remove this service credit record",
+                                ):
+                                    delete_credit_entry_by_id(credit_id)
+                                    clear_streamlit_cache()
+                                    flash(f"Removed service credit record for {emp_label}.")
+                                    st.rerun()
 
         with ledger_tabs[3]:
             st.subheader("Reliever Points Ledger (By Employee)")
@@ -547,19 +553,17 @@ def render(employees_all, leave_all, credit_all, employees_filtered, summary_fil
                                 r_cols[1].write(f"{float(pt_row.get('points', 0) or 0):.2f}")
                                 r_cols[2].write(pt_row.get("notes", "") or "-")
                                 with r_cols[3]:
-                                    if st.button(
-                                        "Delete", key=f"reliever_delete_{pt_id}",
-                                        help="Remove this reliever points session. Does NOT retract any credit already issued from it.",
-                                        use_container_width=True,
+                                    if confirm_destructive_action(
+                                        f"reliever_{pt_id}", f"reliever points session for {emp_label}", "delete",
+                                        help_text="Remove this reliever points session. Does NOT retract any credit already issued from it.",
                                     ):
-                                        if confirm_destructive_action(f"reliever_{pt_id}", f"reliever points session for {emp_label}", "delete"):
-                                            delete_reliever_entry_by_id(pt_id)
-                                            clear_streamlit_cache()
-                                            flash(
-                                                f"Removed reliever points session for {emp_label}. "
-                                                f"Note: any LOCAL credit already issued from past points was not removed."
-                                            )
-                                            st.rerun()
+                                        delete_reliever_entry_by_id(pt_id)
+                                        clear_streamlit_cache()
+                                        flash(
+                                            f"Removed reliever points session for {emp_label}. "
+                                            f"Note: any LOCAL credit already issued from past points was not removed."
+                                        )
+                                        st.rerun()
 
     # =========================================================================
     # ATTENDANCE SUMMARY
