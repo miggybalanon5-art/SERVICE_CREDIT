@@ -211,36 +211,41 @@ def inject_app_css():
     )
 
 
-def confirm_destructive_action(action_id: str, action_label: str, action_type: str = "delete") -> bool:
+def confirm_destructive_action(
+    action_id: str,
+    action_label: str,
+    action_type: str = "delete",
+    trigger_label: str = "Delete",
+    help_text: str | None = None,
+) -> bool:
+    """Two-step Delete -> Confirm/Cancel control.
+
+    Call this unconditionally (never nested inside another `if st.button(...):`).
+    It draws its own trigger button, and the armed state has to be re-checked
+    on every rerun -- wrapping it in an outer button means that outer button
+    goes back to False on the next rerun, so this function (and the Confirm
+    button it draws) would never run again.
+    """
     confirm_key = f"_confirm_{action_id}"
-    
-    if st.session_state.get(confirm_key):
-        # Displays warning cleanly without breaking layouts on narrow viewports
-        st.error(f"⚠️ **Confirm {action_type.title()}**\n\nThis action is permanent and cannot be undone!")
-        
-        # Grid blocks map smoothly across mobile screen widths cleanly
-        col_action, col_cancel = st.columns(2)
-        with col_action:
-            executed = st.button(
-                f"Yes, {action_type.title()}", 
-                key=f"confirm_{action_id}", 
-                use_container_width=True, 
-                type="primary"
-            )
-        with col_cancel:
-            if st.button("Cancel", key=f"cancel_{action_id}", use_container_width=True):
-                st.session_state[confirm_key] = False
-                st.rerun()
-                
-        if executed:
-            st.session_state[confirm_key] = False
-            return True
-        return False
-    else:
-        if st.button(f"🗑️ {action_type.title()} {action_label}", key=f"trigger_{action_id}", use_container_width=True):
+
+    if not st.session_state.get(confirm_key):
+        if st.button(trigger_label, key=f"trigger_{action_id}", help=help_text, use_container_width=True):
             st.session_state[confirm_key] = True
             st.rerun()
         return False
+
+    st.warning(f"⚠️ Are you sure you want to {action_type} {action_label}? This cannot be undone.")
+    confirm_col, cancel_col = st.columns(2)
+    with confirm_col:
+        if st.button(f"✓ Confirm {action_type.title()}", key=f"confirm_{action_id}",
+                     use_container_width=True, type="primary"):
+            st.session_state[confirm_key] = False
+            return True
+    with cancel_col:
+        if st.button("❌ Cancel", key=f"cancel_{action_id}", use_container_width=True):
+            st.session_state[confirm_key] = False
+            st.rerun()
+    return False
 
 
 def keyed_tabs(labels: list[str], session_key: str):
